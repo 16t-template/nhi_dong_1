@@ -389,6 +389,7 @@ export default function MonthlyChartModule({
   thangList = [],
   onRefresh,
   getStaffDisplayName,
+  chartOnly = false, // Chỉ hiện biểu đồ (ẩn thanh điều khiển & phiếu bảo trì)
 }) {
   const [viewMode, setViewMode] = useState('hospitalSheet'); // 'hospitalSheet' | 'interactiveCurve'
   const [activeSheetTab, setActiveSheetTab] = useState('all'); // 'all' | 'p1' | 'p2' | 'maintenance'
@@ -628,6 +629,7 @@ export default function MonthlyChartModule({
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-slate-100/70 p-4 space-y-4 monthly-chart-root">
       {/* Top Header Card (Controls) */}
+      {!chartOnly && (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs no-print">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Left: Title & Subtitle */}
@@ -879,6 +881,7 @@ export default function MonthlyChartModule({
           </div>
         )}
       </div>
+      )}
 
       {/* Main Content Area */}
       {viewMode === 'hospitalSheet' ? (
@@ -895,7 +898,7 @@ export default function MonthlyChartModule({
                   dataMap={monthDataMap}
                 />
               )}
-              {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
+              {!chartOnly && (activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
                 <HospitalMaintenanceSheet
                   specs={specs}
                   cabinetName={resolvedCabinet}
@@ -989,7 +992,7 @@ export default function MonthlyChartModule({
               )}
 
               {/* Maintenance Sheet */}
-              {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
+              {!chartOnly && (activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
                 <HospitalMaintenanceSheet
                   specs={specs}
                   cabinetName={resolvedCabinet}
@@ -1035,7 +1038,7 @@ export default function MonthlyChartModule({
               )}
 
               {/* Sheet 3: PHIẾU BẢO TRÌ THIẾT BỊ (Ảnh 2) */}
-              {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
+              {!chartOnly && (activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
                 <HospitalMaintenanceSheet
                   specs={specs}
                   cabinetName={resolvedCabinet}
