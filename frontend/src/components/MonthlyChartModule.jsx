@@ -389,7 +389,7 @@ export default function MonthlyChartModule({
   thangList = [],
   onRefresh,
   getStaffDisplayName,
-  chartOnly = false, // Chỉ hiện biểu đồ (ẩn thanh điều khiển & phiếu bảo trì)
+  chartOnly = false, // Chỉ hiện biểu đồ + phiếu bảo trì (ẩn thanh điều khiển)
 }) {
   const [viewMode, setViewMode] = useState('hospitalSheet'); // 'hospitalSheet' | 'interactiveCurve'
   const [activeSheetTab, setActiveSheetTab] = useState('all'); // 'all' | 'p1' | 'p2' | 'maintenance'
@@ -898,7 +898,7 @@ export default function MonthlyChartModule({
                   dataMap={monthDataMap}
                 />
               )}
-              {!chartOnly && (activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
+              {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
                 <HospitalMaintenanceSheet
                   specs={specs}
                   cabinetName={resolvedCabinet}
@@ -992,7 +992,7 @@ export default function MonthlyChartModule({
               )}
 
               {/* Maintenance Sheet */}
-              {!chartOnly && (activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
+              {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
                 <HospitalMaintenanceSheet
                   specs={specs}
                   cabinetName={resolvedCabinet}
@@ -1038,7 +1038,7 @@ export default function MonthlyChartModule({
               )}
 
               {/* Sheet 3: PHIẾU BẢO TRÌ THIẾT BỊ (Ảnh 2) */}
-              {!chartOnly && (activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
+              {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
                 <HospitalMaintenanceSheet
                   specs={specs}
                   cabinetName={resolvedCabinet}
