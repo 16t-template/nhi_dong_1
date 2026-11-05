@@ -30,10 +30,27 @@ export function formatDecimal(v) {
   return String(Math.round(n * 100) / 100).replace('.', ',');
 }
 
-// Lệch dọc (px) so với tâm ô khi giá trị có phần lẻ. frac = (giá trị lẻ - giá trị hàng), dương = lên trên
-function fracOffset(frac, cellHeight) {
-  const f = Math.max(-0.5, Math.min(0.5, frac));
-  return -f * cellHeight;
+// Tính vị trí chấm theo quy ước "đường kẻ = số nguyên":
+// hàng có nhãn N trải từ N (mép dưới) tới N + bước (mép trên), giữa hàng = N + bước/2.
+// labels: các giá trị hàng theo thứ tự hiển thị (vd [8,7,6,5,4,3,2]).
+// getRect(label): trả về DOMRect của ô thuộc hàng đó (hoặc null).
+// Trả về { x, y } tương đối so với wrapRect, hoặc null.
+function lineValuePoint(v, labels, getRect, wrapRect) {
+  if (!labels || labels.length === 0) return null;
+  const step = labels.length > 1 ? Math.abs(labels[0] - labels[1]) || 1 : 1;
+  const minL = Math.min(...labels);
+  const maxL = Math.max(...labels);
+  let n = Math.floor(v / step + 1e-9) * step;
+  n = Math.max(minL, Math.min(maxL, n));
+  const rect = getRect(n);
+  if (!rect) return null;
+  const desc = labels[0] > labels[labels.length - 1];
+  const frac = Math.max(-1, Math.min(1, (v - n) / step));
+  const y = desc ? rect.bottom - frac * rect.height : rect.top + frac * rect.height;
+  return {
+    x: rect.left - wrapRect.left + rect.width / 2,
+    y: y - wrapRect.top,
+  };
 }
 
 // Vẽ các chấm tròn lên SVG overlay (để chấm nằm đúng vị trí số lẻ, khớp với đường nối)
@@ -1237,28 +1254,25 @@ function HospitalWeeklyTable({
 
     const curDataMap = dataMapRef.current || {};
     const pts = [];
-    const tempDir = temps.length > 1 && temps[0] < temps[temps.length - 1] ? -1 : 1;
 
     for (let d = startDay; d <= endDay; d++) {
       for (let s = 1; s <= 6; s++) {
         const entry = curDataMap[d]?.[s];
         if (entry && entry.temp !== null && entry.temp !== undefined) {
           const rawTemp = entry.temp;
-          const roundedTemp = Math.round(rawTemp);
-
-          const cell = wrap.querySelector(
-            `[data-cell="true"][data-day="${d}"][data-slot="${s}"][data-temp="${roundedTemp}"]`
+          const pt = lineValuePoint(
+            rawTemp,
+            temps,
+            (lbl) =>
+              wrap
+                .querySelector(
+                  `[data-cell="true"][data-day="${d}"][data-slot="${s}"][data-temp="${lbl}"]`
+                )
+                ?.getBoundingClientRect() || null,
+            wrapRect
           );
-
-          if (cell) {
-            const cellRect = cell.getBoundingClientRect();
-            const x = cellRect.left - wrapRect.left + cellRect.width / 2;
-            let y = cellRect.top - wrapRect.top + cellRect.height / 2;
-
-            // Số lẻ (vd 3,4): dịch chấm lên/xuống theo phần lẻ giữa 2 vạch
-            y += fracOffset((rawTemp - roundedTemp) * tempDir, cellRect.height);
-
-            pts.push({ x, y, temp: rawTemp, day: d, slot: s });
+          if (pt) {
+            pts.push({ ...pt, temp: rawTemp, day: d, slot: s });
           }
         }
       }
@@ -1619,29 +1633,25 @@ function HospitalHalfTable({
 
     const curDataMap = dataMapRef.current || {};
     const pts = [];
-    const tempDir = temps.length > 1 && temps[0] < temps[temps.length - 1] ? -1 : 1;
 
     for (let d = startDay; d <= endDay; d++) {
       ['S', 'C'].forEach((s) => {
         const entry = curDataMap[d]?.[s];
         if (entry && entry.temp !== null && entry.temp !== undefined) {
           const rawTemp = entry.temp;
-          const roundedTemp = Math.round(rawTemp);
-
-          // Find the exact cell matching this day, session, and rounded temperature
-          const cell = wrap.querySelector(
-            `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-temp="${roundedTemp}"]`
+          const pt = lineValuePoint(
+            rawTemp,
+            temps,
+            (lbl) =>
+              wrap
+                .querySelector(
+                  `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-temp="${lbl}"]`
+                )
+                ?.getBoundingClientRect() || null,
+            wrapRect
           );
-
-          if (cell) {
-            const cellRect = cell.getBoundingClientRect();
-            const x = cellRect.left - wrapRect.left + cellRect.width / 2;
-            let y = cellRect.top - wrapRect.top + cellRect.height / 2;
-
-            // Số lẻ (vd 3,4): dịch chấm lên/xuống theo phần lẻ giữa 2 vạch
-            y += fracOffset((rawTemp - roundedTemp) * tempDir, cellRect.height);
-
-            pts.push({ x, y, temp: rawTemp, day: d, session: s });
+          if (pt) {
+            pts.push({ ...pt, temp: rawTemp, day: d, session: s });
           }
         }
       });
@@ -1988,42 +1998,39 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
 
         // Temperature point (Blue)
         if (entry.temp !== null && entry.temp !== undefined) {
-          const roundedT = Math.round(entry.temp);
-          const cell = wrap.querySelector(
-            `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-temp-val="${roundedT}"]`
+          const pt = lineValuePoint(
+            entry.temp,
+            tempScaleRef.current,
+            (lbl) =>
+              wrap
+                .querySelector(
+                  `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-temp-val="${lbl}"]`
+                )
+                ?.getBoundingClientRect() || null,
+            wrapRect
           );
-          if (cell) {
-            const cellRect = cell.getBoundingClientRect();
-            const ts = tempScaleRef.current;
-            const tDir = ts.length > 1 && ts[0] < ts[ts.length - 1] ? -1 : 1;
-            tPts.push({
-              x: cellRect.left - wrapRect.left + cellRect.width / 2,
-              y:
-                cellRect.top - wrapRect.top + cellRect.height / 2 +
-                fracOffset((entry.temp - roundedT) * tDir, cellRect.height),
-              value: entry.temp,
-            });
-          }
+          if (pt) tPts.push({ ...pt, value: entry.temp });
         }
 
         // Humidity point (Red)
         if (entry.hum !== null && entry.hum !== undefined) {
-          // Find closest row in humScale (mỗi hàng 5%)
-          const exactIdx = (100 - entry.hum) / 5;
-          const hRowIdx = Math.max(0, Math.min(curHumScale.length - 1, Math.round(exactIdx)));
-          const cell = wrap.querySelector(
-            `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-hum-idx="${hRowIdx}"]`
+          const pt = lineValuePoint(
+            entry.hum,
+            curHumScale,
+            (lbl) => {
+              const idx = curHumScale.indexOf(lbl);
+              if (idx < 0) return null;
+              return (
+                wrap
+                  .querySelector(
+                    `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-hum-idx="${idx}"]`
+                  )
+                  ?.getBoundingClientRect() || null
+              );
+            },
+            wrapRect
           );
-          if (cell) {
-            const cellRect = cell.getBoundingClientRect();
-            hPts.push({
-              x: cellRect.left - wrapRect.left + cellRect.width / 2,
-              y:
-                cellRect.top - wrapRect.top + cellRect.height / 2 +
-                fracOffset(hRowIdx - exactIdx, cellRect.height),
-              value: entry.hum,
-            });
-          }
+          if (pt) hPts.push({ ...pt, value: entry.hum });
         }
       });
     }
