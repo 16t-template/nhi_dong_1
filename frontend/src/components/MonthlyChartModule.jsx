@@ -55,6 +55,23 @@ function drawSvgDots(svg, layer, pts, color, r) {
     c.setAttribute('fill', color);
     c.setAttribute('class', 'sheet-dot');
     g.appendChild(c);
+
+    // Ghi số lẻ cạnh chấm (vd "2,6") để đọc đúng giá trị thập phân
+    const v = pt.temp ?? pt.value;
+    if (typeof v === 'number' && !Number.isInteger(v)) {
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('x', (pt.x + r + 1.5).toFixed(1));
+      t.setAttribute('y', (pt.y - r - 1).toFixed(1));
+      t.setAttribute('font-size', '9');
+      t.setAttribute('font-weight', '700');
+      t.setAttribute('fill', color);
+      t.setAttribute('stroke', '#fff');
+      t.setAttribute('stroke-width', '2.5');
+      t.setAttribute('paint-order', 'stroke');
+      t.setAttribute('class', 'sheet-dot');
+      t.textContent = formatDecimal(v);
+      g.appendChild(t);
+    }
   });
 }
 import { isSpecialSchedule } from './KhungGioSelector';
@@ -1984,6 +2001,7 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
               y:
                 cellRect.top - wrapRect.top + cellRect.height / 2 +
                 fracOffset((entry.temp - roundedT) * tDir, cellRect.height),
+              value: entry.temp,
             });
           }
         }
@@ -2003,6 +2021,7 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
               y:
                 cellRect.top - wrapRect.top + cellRect.height / 2 +
                 fracOffset(hRowIdx - exactIdx, cellRect.height),
+              value: entry.hum,
             });
           }
         }
