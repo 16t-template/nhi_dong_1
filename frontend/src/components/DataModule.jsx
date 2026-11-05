@@ -18,7 +18,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { fetchDataRows, fetchUsers } from '../services/googleSheets';
-import MonthlyChartModule from './MonthlyChartModule';
+import MonthlyChartModule, { formatDecimal } from './MonthlyChartModule';
 
 export default function DataModule({ onBack, usersList = [] }) {
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'stats' | 'chart'
@@ -1128,7 +1128,7 @@ export default function DataModule({ onBack, usersList = [] }) {
                         {visibleColumns.nhiet_do && (
                           <td className="px-3 py-2.5 border-b border-r border-slate-100 text-center whitespace-nowrap">
                             <span className="font-extrabold text-sm text-slate-900">
-                              {r.nhiet_do_do_dc !== '' ? r.nhiet_do_do_dc : '—'}
+                              {r.nhiet_do_do_dc !== '' ? formatDecimal(r.nhiet_do_do_dc) : '—'}
                             </span>
                           </td>
                         )}
@@ -1149,7 +1149,7 @@ export default function DataModule({ onBack, usersList = [] }) {
                         {/* Độ ẩm */}
                         {visibleColumns.do_am && (
                           <td className="px-3 py-2.5 border-b border-r border-slate-100 text-center text-slate-600 whitespace-nowrap font-semibold">
-                            {r.do_am_do_dc ? `${r.do_am_do_dc}%` : '—'}
+                            {r.do_am_do_dc ? `${formatDecimal(r.do_am_do_dc)}%` : '—'}
                           </td>
                         )}
 

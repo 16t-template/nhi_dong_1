@@ -99,10 +99,10 @@ export default function TemperatureForm({ dsTu, currentUser }) {
 
   const handleHumidityBlur = () => {
     if (doAmDoDc === '') return;
-    const val = parseFloat(doAmDoDc);
-    if (!isNaN(val) && val % 5 !== 0) {
-      alert('Độ ẩm đo được phải là số chia hết cho 5 (ví dụ: 40, 45, 50,...)');
-      setDoAmDoDc(String(Math.round(val / 5) * 5));
+    const val = parseFloat(String(doAmDoDc).replace(',', '.'));
+    if (isNaN(val)) {
+      alert('Độ ẩm đo được phải là số (ví dụ: 55 hoặc 55,5)');
+      setDoAmDoDc('');
     }
   };
 
@@ -120,8 +120,17 @@ export default function TemperatureForm({ dsTu, currentUser }) {
       return;
     }
 
-    if (showHumidity && doAmDoDc !== '' && parseFloat(doAmDoDc) % 5 !== 0) {
-      alert('Độ ẩm phải là số chia hết cho 5!');
+    if (isNaN(parseFloat(String(nhietDoDoDc).replace(',', '.')))) {
+      alert('Nhiệt độ đo được phải là số (ví dụ: 2,6)');
+      return;
+    }
+
+    if (
+      showHumidity &&
+      doAmDoDc !== '' &&
+      isNaN(parseFloat(String(doAmDoDc).replace(',', '.')))
+    ) {
+      alert('Độ ẩm đo được phải là số (ví dụ: 55 hoặc 55,5)');
       return;
     }
 
@@ -294,12 +303,12 @@ export default function TemperatureForm({ dsTu, currentUser }) {
                 NHIỆT ĐỘ ĐO ĐƯỢC <span className="text-rose-500">*</span>
               </label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={nhietDoDoDc}
                 onChange={(e) => setNhietDoDoDc(e.target.value)}
                 className="w-full rounded-xl border-2 border-teal-500 bg-white px-3 py-2 text-center text-2xl font-black text-teal-800 shadow-inner focus:outline-none focus:ring-4 focus:ring-teal-400/20"
-                placeholder="0.0"
+                placeholder="0,0"
               />
             </div>
           </div>
@@ -343,15 +352,15 @@ export default function TemperatureForm({ dsTu, currentUser }) {
                     ĐỘ ẨM ĐO ĐƯỢC (%)
                   </label>
                   <input
-                    type="number"
-                    step="5"
+                    type="text"
+                    inputMode="decimal"
                     value={doAmDoDc}
                     onChange={handleHumidityChange}
                     onBlur={handleHumidityBlur}
                     className="w-full rounded-lg border border-sky-200 bg-slate-50 px-2 py-1 text-center text-xl font-black text-sky-800 focus:bg-white focus:outline-none"
                     placeholder="0"
                   />
-                  <span className="text-[10px] text-slate-400">Chia hết cho 5</span>
+                  <span className="text-[10px] text-slate-400">Có thể nhập số lẻ, vd 55,5</span>
                 </div>
               </div>
             </div>

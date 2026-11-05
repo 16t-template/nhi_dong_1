@@ -70,10 +70,12 @@ export default function ChartOnlyView({ cabinetParam, monthParam, getStaffDispla
   const cabinetName = useMemo(() => {
     const target = cleanStr(cabinetParam);
     if (!target) return '';
-    const exact = dataRows.find(
+    const matches = dataRows.filter(
       (r) => cleanStr(r.ten) === target || cleanStr(r.id_tu) === target
     );
-    if (exact) return (exact.ten || '').trim();
+    // Ưu tiên dòng có tên tủ (một số dòng chỉ có id_tu, cột ten bị trống)
+    const exact = matches.find((r) => (r.ten || '').trim()) || matches[0];
+    if (exact) return (exact.ten || exact.id_tu || '').trim();
     const partial = dataRows.find((r) => cleanStr(r.ten).includes(target));
     return partial ? (partial.ten || '').trim() : '';
   }, [dataRows, cabinetParam]);

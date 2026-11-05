@@ -13,6 +13,50 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
+
+// Chuyển chuỗi số (hỗ trợ dấu phẩy thập phân "2,6") thành Number, trả về null nếu không hợp lệ
+export function parseDecimal(v) {
+  if (v === null || v === undefined) return null;
+  const str = String(v).trim().replace(/\s/g, '').replace(',', '.');
+  if (str === '') return null;
+  const n = Number(str);
+  return isNaN(n) ? null : n;
+}
+
+// Hiển thị số thập phân kiểu Việt Nam (2.6 -> "2,6")
+export function formatDecimal(v) {
+  const n = parseDecimal(v);
+  if (n === null) return v ?? '';
+  return String(Math.round(n * 100) / 100).replace('.', ',');
+}
+
+// Lệch dọc (px) so với tâm ô khi giá trị có phần lẻ. frac = (giá trị lẻ - giá trị hàng), dương = lên trên
+function fracOffset(frac, cellHeight) {
+  const f = Math.max(-0.5, Math.min(0.5, frac));
+  return -f * cellHeight;
+}
+
+// Vẽ các chấm tròn lên SVG overlay (để chấm nằm đúng vị trí số lẻ, khớp với đường nối)
+function drawSvgDots(svg, layer, pts, color, r) {
+  if (!svg) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  let g = svg.querySelector(`g[data-layer="${layer}"]`);
+  if (!g) {
+    g = document.createElementNS(NS, 'g');
+    g.setAttribute('data-layer', layer);
+    svg.appendChild(g);
+  }
+  while (g.firstChild) g.removeChild(g.firstChild);
+  pts.forEach((pt) => {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', pt.x.toFixed(1));
+    c.setAttribute('cy', pt.y.toFixed(1));
+    c.setAttribute('r', String(r));
+    c.setAttribute('fill', color);
+    c.setAttribute('class', 'sheet-dot');
+    g.appendChild(c);
+  });
+}
 import { isSpecialSchedule } from './KhungGioSelector';
 
 /**
@@ -130,7 +174,7 @@ export function getEquipmentSpecs(cabinetName, dataRows = []) {
         const rows = dataRows.filter(
           (r) => cleanStr(r.ten).includes('tiểu cầu') || cleanStr(r.ten).includes('helmer')
         );
-        const hasNegative = rows.some((r) => Number(r.nhiet_do_do_dc) <= -10);
+        const hasNegative = rows.some((r) => parseDecimal(r.nhiet_do_do_dc) <= -10);
         if (hasNegative) {
           return {
             type: 'CABINET_6_SLOTS',
@@ -541,14 +585,8 @@ export default function MonthlyChartModule({
         slot = map[day][1] ? 2 : 1;
       }
 
-      const temp =
-        r.nhiet_do_do_dc !== '' && !isNaN(Number(r.nhiet_do_do_dc))
-          ? Number(r.nhiet_do_do_dc)
-          : null;
-      const hum =
-        r.do_am_do_dc !== '' && !isNaN(Number(r.do_am_do_dc))
-          ? Number(r.do_am_do_dc)
-          : null;
+      const temp = parseDecimal(r.nhiet_do_do_dc);
+      const hum = parseDecimal(r.do_am_do_dc);
       const staffId = (r.id_nv || '').trim().toUpperCase();
       const staffName = getStaffDisplayName
         ? getStaffDisplayName(r.id_nv)
@@ -1182,6 +1220,7 @@ function HospitalWeeklyTable({
 
     const curDataMap = dataMapRef.current || {};
     const pts = [];
+    const tempDir = temps.length > 1 && temps[0] < temps[temps.length - 1] ? -1 : 1;
 
     for (let d = startDay; d <= endDay; d++) {
       for (let s = 1; s <= 6; s++) {
@@ -1199,23 +1238,8 @@ function HospitalWeeklyTable({
             const x = cellRect.left - wrapRect.left + cellRect.width / 2;
             let y = cellRect.top - wrapRect.top + cellRect.height / 2;
 
-            if (rawTemp !== roundedTemp) {
-              const floorT = Math.floor(rawTemp);
-              const ceilT = Math.ceil(rawTemp);
-              const cellF = wrap.querySelector(
-                `[data-cell="true"][data-day="${d}"][data-slot="${s}"][data-temp="${floorT}"]`
-              );
-              const cellC = wrap.querySelector(
-                `[data-cell="true"][data-day="${d}"][data-slot="${s}"][data-temp="${ceilT}"]`
-              );
-              if (cellF && cellC) {
-                const rF = cellF.getBoundingClientRect();
-                const rC = cellC.getBoundingClientRect();
-                const yF = rF.top - wrapRect.top + rF.height / 2;
-                const yC = rC.top - wrapRect.top + rC.height / 2;
-                y = yF + (rawTemp - floorT) * (yC - yF);
-              }
-            }
+            // Số lẻ (vd 3,4): dịch chấm lên/xuống theo phần lẻ giữa 2 vạch
+            y += fracOffset((rawTemp - roundedTemp) * tempDir, cellRect.height);
 
             pts.push({ x, y, temp: rawTemp, day: d, slot: s });
           }
@@ -1233,6 +1257,7 @@ function HospitalWeeklyTable({
       polyRef.current.setAttribute('points', '');
       polyRef.current.style.display = 'none';
     }
+    drawSvgDots(svgRef.current, 'temp', pts, '#dc2626', 3.25);
   };
 
   useEffect(() => {
@@ -1446,12 +1471,6 @@ function HospitalWeeklyTable({
                     const d = startDay + dayIdx;
                     return Array.from({ length: SLOTS_PER_DAY }, (_, sIdx) => {
                       const s = sIdx + 1;
-                      const entry = dataMap[d]?.[s];
-                      const hasDot =
-                        entry &&
-                        entry.temp !== null &&
-                        entry.temp !== undefined &&
-                        Math.round(entry.temp) === t;
                       const isDayEnd = s === SLOTS_PER_DAY;
 
                       return (
@@ -1467,20 +1486,6 @@ function HospitalWeeklyTable({
                           data-slot={s}
                           data-temp={t}
                         >
-                          {hasDot && (
-                            <span
-                              className="sheet-dot"
-                              style={{
-                                display: 'block',
-                                width: '6.5px',
-                                height: '6.5px',
-                                borderRadius: '50%',
-                                backgroundColor: '#dc2626',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} L${s}: ${entry.temp}°C`}
-                            />
-                          )}
                         </td>
                       );
                     });
@@ -1597,6 +1602,7 @@ function HospitalHalfTable({
 
     const curDataMap = dataMapRef.current || {};
     const pts = [];
+    const tempDir = temps.length > 1 && temps[0] < temps[temps.length - 1] ? -1 : 1;
 
     for (let d = startDay; d <= endDay; d++) {
       ['S', 'C'].forEach((s) => {
@@ -1615,24 +1621,8 @@ function HospitalHalfTable({
             const x = cellRect.left - wrapRect.left + cellRect.width / 2;
             let y = cellRect.top - wrapRect.top + cellRect.height / 2;
 
-            // If temperature has a fraction (e.g. 4.5): smoothly interpolate between rows
-            if (rawTemp !== roundedTemp) {
-              const floorT = Math.floor(rawTemp);
-              const ceilT = Math.ceil(rawTemp);
-              const cellF = wrap.querySelector(
-                `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-temp="${floorT}"]`
-              );
-              const cellC = wrap.querySelector(
-                `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-temp="${ceilT}"]`
-              );
-              if (cellF && cellC) {
-                const rF = cellF.getBoundingClientRect();
-                const rC = cellC.getBoundingClientRect();
-                const yF = rF.top - wrapRect.top + rF.height / 2;
-                const yC = rC.top - wrapRect.top + rC.height / 2;
-                y = yF + (rawTemp - floorT) * (yC - yF);
-              }
-            }
+            // Số lẻ (vd 3,4): dịch chấm lên/xuống theo phần lẻ giữa 2 vạch
+            y += fracOffset((rawTemp - roundedTemp) * tempDir, cellRect.height);
 
             pts.push({ x, y, temp: rawTemp, day: d, session: s });
           }
@@ -1648,6 +1638,7 @@ function HospitalHalfTable({
       polyRef.current.setAttribute('points', '');
       polyRef.current.style.display = 'none';
     }
+    drawSvgDots(svgRef.current, 'temp', pts, '#dc2626', 3.75);
   };
 
   useLayoutEffect(() => {
@@ -1842,18 +1833,6 @@ function HospitalHalfTable({
                   {/* Day session cells with native centered dots */}
                   {Array.from({ length: days }, (_, dayIdx) => {
                     const d = startDay + dayIdx;
-                    const entryS = dataMap[d]?.S;
-                    const entryC = dataMap[d]?.C;
-                    const hasDotS =
-                      entryS &&
-                      entryS.temp !== null &&
-                      entryS.temp !== undefined &&
-                      Math.round(entryS.temp) === t;
-                    const hasDotC =
-                      entryC &&
-                      entryC.temp !== null &&
-                      entryC.temp !== undefined &&
-                      Math.round(entryC.temp) === t;
 
                     return (
                       <React.Fragment key={d}>
@@ -1864,20 +1843,6 @@ function HospitalHalfTable({
                           data-session="S"
                           data-temp={t}
                         >
-                          {hasDotS && (
-                            <span
-                              className="sheet-dot"
-                              style={{
-                                display: 'block',
-                                width: '7.5px',
-                                height: '7.5px',
-                                borderRadius: '50%',
-                                backgroundColor: '#dc2626',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} S: ${entryS.temp}°C`}
-                            />
-                          )}
                         </td>
                         <td
                           className="relative border-r border-slate-300 p-0 text-center align-middle"
@@ -1886,20 +1851,6 @@ function HospitalHalfTable({
                           data-session="C"
                           data-temp={t}
                         >
-                          {hasDotC && (
-                            <span
-                              className="sheet-dot"
-                              style={{
-                                display: 'block',
-                                width: '7.5px',
-                                height: '7.5px',
-                                borderRadius: '50%',
-                                backgroundColor: '#dc2626',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} C: ${entryC.temp}°C`}
-                            />
-                          )}
                         </td>
                       </React.Fragment>
                     );
@@ -2026,18 +1977,22 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
           );
           if (cell) {
             const cellRect = cell.getBoundingClientRect();
+            const ts = tempScaleRef.current;
+            const tDir = ts.length > 1 && ts[0] < ts[ts.length - 1] ? -1 : 1;
             tPts.push({
               x: cellRect.left - wrapRect.left + cellRect.width / 2,
-              y: cellRect.top - wrapRect.top + cellRect.height / 2,
+              y:
+                cellRect.top - wrapRect.top + cellRect.height / 2 +
+                fracOffset((entry.temp - roundedT) * tDir, cellRect.height),
             });
           }
         }
 
         // Humidity point (Red)
         if (entry.hum !== null && entry.hum !== undefined) {
-          const roundedH = Math.round(entry.hum);
-          // Find closest row in humScale
-          const hRowIdx = Math.max(0, Math.min(curHumScale.length - 1, Math.round((100 - roundedH) / 5)));
+          // Find closest row in humScale (mỗi hàng 5%)
+          const exactIdx = (100 - entry.hum) / 5;
+          const hRowIdx = Math.max(0, Math.min(curHumScale.length - 1, Math.round(exactIdx)));
           const cell = wrap.querySelector(
             `[data-cell="true"][data-day="${d}"][data-session="${s}"][data-hum-idx="${hRowIdx}"]`
           );
@@ -2045,7 +2000,9 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
             const cellRect = cell.getBoundingClientRect();
             hPts.push({
               x: cellRect.left - wrapRect.left + cellRect.width / 2,
-              y: cellRect.top - wrapRect.top + cellRect.height / 2,
+              y:
+                cellRect.top - wrapRect.top + cellRect.height / 2 +
+                fracOffset(hRowIdx - exactIdx, cellRect.height),
             });
           }
         }
@@ -2069,6 +2026,8 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
       humPolyRef.current.setAttribute('points', '');
       humPolyRef.current.style.display = 'none';
     }
+    drawSvgDots(svgRef.current, 'temp', tPts, '#0056b3', 3.25);
+    drawSvgDots(svgRef.current, 'hum', hPts, '#d32f2f', 3.25);
   };
 
   useLayoutEffect(() => {
@@ -2236,34 +2195,6 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
                   {/* Day session cells with native centered dots */}
                   {Array.from({ length: 31 }, (_, dayIdx) => {
                     const d = dayIdx + 1;
-                    const entryS = dataMap[d]?.S;
-                    const entryC = dataMap[d]?.C;
-                    const hasTempS =
-                      entryS &&
-                      entryS.temp !== null &&
-                      entryS.temp !== undefined &&
-                      Math.round(entryS.temp) === t;
-                    const hasTempC =
-                      entryC &&
-                      entryC.temp !== null &&
-                      entryC.temp !== undefined &&
-                      Math.round(entryC.temp) === t;
-                    const hasHumS =
-                      entryS &&
-                      entryS.hum !== null &&
-                      entryS.hum !== undefined &&
-                      Math.max(
-                        0,
-                        Math.min(humScale.length - 1, Math.round((100 - Math.round(entryS.hum)) / 5))
-                      ) === rowIdx;
-                    const hasHumC =
-                      entryC &&
-                      entryC.hum !== null &&
-                      entryC.hum !== undefined &&
-                      Math.max(
-                        0,
-                        Math.min(humScale.length - 1, Math.round((100 - Math.round(entryC.hum)) / 5))
-                      ) === rowIdx;
 
                     return (
                       <React.Fragment key={d}>
@@ -2275,58 +2206,6 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
                           data-temp-val={t}
                           data-hum-idx={rowIdx}
                         >
-                          {hasTempS && !hasHumS && (
-                            <span
-                              className="sheet-dot inline-block rounded-full bg-blue-700"
-                              style={{
-                                width: '6.5px',
-                                height: '6.5px',
-                                backgroundColor: '#0056b3',
-                                borderRadius: '50%',
-                                display: 'block',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} S: ${entryS.temp}°C`}
-                            />
-                          )}
-                          {hasHumS && !hasTempS && (
-                            <span
-                              className="sheet-dot inline-block rounded-full bg-rose-600"
-                              style={{
-                                width: '6.5px',
-                                height: '6.5px',
-                                backgroundColor: '#d32f2f',
-                                borderRadius: '50%',
-                                display: 'block',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} S: ${entryS.hum}%`}
-                            />
-                          )}
-                          {hasTempS && hasHumS && (
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span
-                                className="sheet-dot"
-                                style={{
-                                  width: '5.5px',
-                                  height: '5.5px',
-                                  backgroundColor: '#0056b3',
-                                  borderRadius: '50%',
-                                  display: 'inline-block',
-                                }}
-                              />
-                              <span
-                                className="sheet-dot"
-                                style={{
-                                  width: '5.5px',
-                                  height: '5.5px',
-                                  backgroundColor: '#d32f2f',
-                                  borderRadius: '50%',
-                                  display: 'inline-block',
-                                }}
-                              />
-                            </div>
-                          )}
                         </td>
                         <td
                           className="relative border-r border-slate-300 p-0 text-center align-middle"
@@ -2336,58 +2215,6 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
                           data-temp-val={t}
                           data-hum-idx={rowIdx}
                         >
-                          {hasTempC && !hasHumC && (
-                            <span
-                              className="sheet-dot inline-block rounded-full bg-blue-700"
-                              style={{
-                                width: '6.5px',
-                                height: '6.5px',
-                                backgroundColor: '#0056b3',
-                                borderRadius: '50%',
-                                display: 'block',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} C: ${entryC.temp}°C`}
-                            />
-                          )}
-                          {hasHumC && !hasTempC && (
-                            <span
-                              className="sheet-dot inline-block rounded-full bg-rose-600"
-                              style={{
-                                width: '6.5px',
-                                height: '6.5px',
-                                backgroundColor: '#d32f2f',
-                                borderRadius: '50%',
-                                display: 'block',
-                                margin: 'auto',
-                              }}
-                              title={`Ngày ${d} C: ${entryC.hum}%`}
-                            />
-                          )}
-                          {hasTempC && hasHumC && (
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span
-                                className="sheet-dot"
-                                style={{
-                                  width: '5.5px',
-                                  height: '5.5px',
-                                  backgroundColor: '#0056b3',
-                                  borderRadius: '50%',
-                                  display: 'inline-block',
-                                }}
-                              />
-                              <span
-                                className="sheet-dot"
-                                style={{
-                                  width: '5.5px',
-                                  height: '5.5px',
-                                  backgroundColor: '#d32f2f',
-                                  borderRadius: '50%',
-                                  display: 'inline-block',
-                                }}
-                              />
-                            </div>
-                          )}
                         </td>
                       </React.Fragment>
                     );
@@ -2707,8 +2534,8 @@ function InteractiveCurveView({
   const { yMin, yMax, yTicks } = useMemo(() => {
     const values = [];
     chartRows.forEach((r) => {
-      const t = Number(r.nhiet_do_do_dc);
-      if (!isNaN(t)) values.push(t);
+      const t = parseDecimal(r.nhiet_do_do_dc);
+      if (t !== null) values.push(t);
     });
 
     if (specs.tempMin !== undefined && specs.tempMax !== undefined) {
@@ -2756,7 +2583,7 @@ function InteractiveCurveView({
 
     const points = chartRows.map((r, idx) => ({
       x: getX(idx, chartRows.length),
-      y: getY(Number(r.nhiet_do_do_dc) || 0),
+      y: getY(parseDecimal(r.nhiet_do_do_dc) ?? 0),
       row: r,
       idx,
     }));
@@ -2925,12 +2752,12 @@ function InteractiveCurveView({
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-slate-400">Nhiệt độ đo:</span>
-                <span className="text-sm font-black text-blue-600">{hoveredPoint.row.nhiet_do_do_dc}°C</span>
+                <span className="text-sm font-black text-blue-600">{formatDecimal(hoveredPoint.row.nhiet_do_do_dc)}°C</span>
               </div>
               {hoveredPoint.row.do_am_do_dc && (
                 <div className="flex justify-between">
                   <span className="text-slate-400">Độ ẩm đo:</span>
-                  <span className="font-semibold text-slate-700">{hoveredPoint.row.do_am_do_dc}%</span>
+                  <span className="font-semibold text-slate-700">{formatDecimal(hoveredPoint.row.do_am_do_dc)}%</span>
                 </div>
               )}
               <div className="flex justify-between items-baseline gap-2">

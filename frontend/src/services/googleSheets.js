@@ -195,6 +195,50 @@ export async function fetchDataRows() {
     .reverse(); // Most recent first
 }
 
+let cachedDataSheetId = null;
+
+/**
+ * Reset number format (về "Tự động") cho cột I:N (nhiet_do_min ... do_am_do_dc) của dòng vừa append
+ */
+async function resetNumberFormat(token, sid, appendResult) {
+  const range = appendResult?.updates?.updatedRange || ''; // vd: DATA!A4020:W4020
+  const m = range.match(/![A-Z]+(\d+)/);
+  if (!m) return;
+  const rowIndex = parseInt(m[1], 10) - 1;
+
+  if (cachedDataSheetId === null) {
+    const meta = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sid}?fields=sheets.properties(sheetId,title)`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then((r) => r.json());
+    const sheet = (meta.sheets || []).find((s) => s.properties.title === 'DATA');
+    if (!sheet) return;
+    cachedDataSheetId = sheet.properties.sheetId;
+  }
+
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId: cachedDataSheetId,
+              startRowIndex: rowIndex,
+              endRowIndex: rowIndex + 1,
+              startColumnIndex: 8, // I
+              endColumnIndex: 14, // N (exclusive)
+            },
+            cell: { userEnteredFormat: {} },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+      ],
+    }),
+  });
+}
+
 /**
  * Generate 8-character random ID
  */
@@ -238,9 +282,17 @@ export async function submitRecord({
 
   const xacNhanVal = '';
   const udtVal = now.toISOString();
-  const lb1Val = `${idTu} | ${nhietDoDoDc} | ${ketQua}`;
+  const lb1Val = `${idTu} | ${String(nhietDoDoDc).replace('.', ',')} | ${ketQua}`;
   const namThangVal = `${now.getFullYear()}/${pad0(now.getMonth() + 1)}`;
   const namThangTuVal = `${namThangVal} | ${idTu}`;
+
+  // Gửi số dạng Number để Google Sheets (locale vi_VN) lưu đúng số thập phân, vd "2,6" -> 2.6
+  const toNum = (v) => {
+    const str = String(v ?? '').trim().replace(',', '.');
+    if (str === '') return '';
+    const n = Number(str);
+    return isNaN(n) ? v : n;
+  };
 
   const rowData = [
     idVal,
@@ -251,12 +303,12 @@ export async function submitRecord({
     idTu,
     tenTu,
     viTri,
-    nhietDoMin,
-    nhietDoMax,
-    nhietDoDoDc,
-    doAmMin,
-    doAmMax,
-    doAmDoDc,
+    toNum(nhietDoMin),
+    toNum(nhietDoMax),
+    toNum(nhietDoDoDc),
+    toNum(doAmMin),
+    toNum(doAmMax),
+    toNum(doAmDoDc),
     ketQua,
     idNvVal,
     ghiChu,
@@ -296,6 +348,16 @@ export async function submitRecord({
     },
     body: JSON.stringify({ values: [rowData] }),
   });
+
+  // Đặt định dạng "Tự động" cho các cột số (I:N) của dòng vừa thêm,
+  // tránh việc dòng mới kế thừa định dạng Ngày khiến 3,5 hiện thành ngày tháng.
+  if (resData.ok) {
+    try {
+      await resetNumberFormat(token, sid, await resData.clone().json());
+    } catch (fmtErr) {
+      console.error('Lỗi đặt định dạng số:', fmtErr);
+    }
+  }
 
   let resCV = { ok: true };
   if (shouldAppendCV) {
