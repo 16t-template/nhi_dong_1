@@ -367,6 +367,33 @@ export default function DataModule({ onBack, usersList = [] }) {
     });
   }, [filteredRows, sortDirection]);
 
+  // Phân trang
+  const [pageSize, setPageSize] = useState(100);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedRows = useMemo(
+    () => sortedRows.slice(pageStart, pageStart + pageSize),
+    [sortedRows, pageStart, pageSize]
+  );
+
+  // Về trang 1 khi đổi bộ lọc / tìm kiếm / sắp xếp
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, filterTenTu, filterThang, filterViTri, filterKhungH, filterKetQua, sortDirection]);
+
+  // Các số trang hiển thị (tối đa 5 nút quanh trang hiện tại)
+  const pageNumbers = useMemo(() => {
+    const maxBtn = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxBtn / 2));
+    let end = Math.min(totalPages, start + maxBtn - 1);
+    start = Math.max(1, end - maxBtn + 1);
+    const arr = [];
+    for (let n = start; n <= end; n++) arr.push(n);
+    return arr;
+  }, [currentPage, totalPages]);
+
   // Checkbox toggle with guaranteed unique key
   const toggleSelectAll = () => {
     if (selectedIds.size === sortedRows.length) {
@@ -1048,7 +1075,7 @@ export default function DataModule({ onBack, usersList = [] }) {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {sortedRows.map((r, i) => {
+                  {pagedRows.map((r, i) => {
                     const rowKey = r.uniqueId || `row_${r.rowIndex}_${r.id}`;
                     const isSelected = selectedIds.has(rowKey);
 
@@ -1224,6 +1251,86 @@ export default function DataModule({ onBack, usersList = [] }) {
                 </tbody>
               </table>
             )}
+          </div>
+        )}
+
+        {/* Thanh phân trang */}
+        {activeTab === 'list' && !isLoading && sortedRows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-slate-600">
+                Hiển thị{' '}
+                <span className="font-bold text-slate-900">
+                  {pageStart + 1} - {Math.min(pageStart + pageSize, sortedRows.length)}
+                </span>{' '}
+                / <span className="font-bold text-slate-900">{sortedRows.length}</span> dòng
+              </span>
+              <label className="flex items-center gap-2 text-slate-600">
+                Cỡ trang:
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  {[25, 50, 100, 200, 500].map((n) => (
+                    <option key={n} value={n}>
+                      {n} dòng
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <span className="px-2 font-bold text-blue-700">Trang</span>
+              {[
+                { label: '«', title: 'Trang đầu', to: 1, disabled: currentPage === 1 },
+                { label: '‹', title: 'Trang trước', to: currentPage - 1, disabled: currentPage === 1 },
+              ].map((b) => (
+                <button
+                  key={b.title}
+                  type="button"
+                  title={b.title}
+                  disabled={b.disabled}
+                  onClick={() => setPage(b.to)}
+                  className="h-7 w-7 rounded-lg text-sm font-bold text-slate-600 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  {b.label}
+                </button>
+              ))}
+              {pageNumbers.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPage(n)}
+                  className={`h-7 min-w-7 rounded-lg px-2 font-bold transition ${
+                    n === currentPage
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-700 hover:bg-white'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              {[
+                { label: '›', title: 'Trang sau', to: currentPage + 1, disabled: currentPage === totalPages },
+                { label: '»', title: 'Trang cuối', to: totalPages, disabled: currentPage === totalPages },
+              ].map((b) => (
+                <button
+                  key={b.title}
+                  type="button"
+                  title={b.title}
+                  disabled={b.disabled}
+                  onClick={() => setPage(b.to)}
+                  className="h-7 w-7 rounded-lg text-sm font-bold text-slate-600 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
