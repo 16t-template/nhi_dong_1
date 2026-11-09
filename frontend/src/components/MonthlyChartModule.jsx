@@ -178,13 +178,13 @@ export function getEquipmentSpecs(cabinetName, dataRows = []) {
       humScale: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15],
       code: 'FM-EQ-HE-004 V4.0',
     },
-    // 2. Memmert WTB35 (37°C & 56°C)
+    // 2. Memmert WTB35 (36°C ~ 38°C)
     {
       type: 'MEMMERT',
       match: ['memmert', 'wtb35', 'bể điều nhiệt'],
       title: 'PHIẾU THEO DÕI NHIỆT ĐỘ BỂ ĐIỀU NHIỆT MEMMERT WTB35',
       code: 'FM-EQ-HE-003 V4.0',
-      standardTemp: '37°C & 56°C',
+      standardTemp: '36°C ~ 38°C',
       deviceCode: 'HE-cm-064',
       managerCode: 'LIB001',
       temps: [57, 56, 55, 'sep', 38, 37, 36],
