@@ -27,19 +27,43 @@ export default function TemperatureForm({ dsTu, currentUser }) {
 
   const signatureRef = useRef(null);
 
-  // Status calculation (ĐẠT / THẤP / CAO)
+  // Status calculation (ĐẠT / THẤP / CAO) theo cả nhiệt độ và độ ẩm
+  const toNumber = (v) => {
+    const s = String(v ?? '').trim().replace(',', '.');
+    if (s === '') return NaN;
+    return parseFloat(s);
+  };
+
+  // So sánh 1 giá trị với ngưỡng; ngưỡng trống thì bỏ qua phía đó
+  const checkRange = (val, min, max) => {
+    if (isNaN(val)) return '';
+    if (!isNaN(min) && val < min) return 'THẤP';
+    if (!isNaN(max) && val > max) return 'CAO';
+    return 'ĐẠT';
+  };
+
+  const nhietDoStatus =
+    nhietDoMin === '' && nhietDoMax === ''
+      ? ''
+      : checkRange(toNumber(nhietDoDoDc), toNumber(nhietDoMin), toNumber(nhietDoMax));
+
+  // Độ ẩm: chỉ xét khi là phòng có theo dõi độ ẩm và đã nhập; độ ẩm luôn trong 0 - 100%
+  const doAmMinNum = toNumber(doAmMin);
+  const doAmMaxNum = toNumber(doAmMax);
+  const doAmStatus =
+    showHumidity && String(doAmDoDc).trim() !== ''
+      ? checkRange(
+          toNumber(doAmDoDc),
+          isNaN(doAmMinNum) ? 0 : doAmMinNum,
+          isNaN(doAmMaxNum) ? 100 : doAmMaxNum
+        )
+      : '';
+
   const getKetQua = () => {
-    if (nhietDoDoDc === '' || nhietDoMin === '' || nhietDoMax === '') {
-      return '';
-    }
-    const val = parseFloat(String(nhietDoDoDc).replace(',', '.'));
-    const min = parseFloat(String(nhietDoMin).replace(',', '.'));
-    const max = parseFloat(String(nhietDoMax).replace(',', '.'));
-
-    if (isNaN(val) || isNaN(min) || isNaN(max)) return '';
-
-    if (val < min) return 'THẤP';
-    if (val > max) return 'CAO';
+    if (!nhietDoStatus) return '';
+    // Không đạt nếu nhiệt độ HOẶC độ ẩm vượt ngưỡng (ưu tiên báo nhiệt độ)
+    if (nhietDoStatus !== 'ĐẠT') return nhietDoStatus;
+    if (doAmStatus && doAmStatus !== 'ĐẠT') return doAmStatus;
     return 'ĐẠT';
   };
 
@@ -132,6 +156,14 @@ export default function TemperatureForm({ dsTu, currentUser }) {
     ) {
       alert('Độ ẩm đo được phải là số (ví dụ: 55 hoặc 55,5)');
       return;
+    }
+
+    if (showHumidity && doAmDoDc !== '') {
+      const h = toNumber(doAmDoDc);
+      if (h < 0 || h > 100) {
+        alert('Độ ẩm đo được phải nằm trong khoảng 0 - 100%');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -402,6 +434,18 @@ export default function TemperatureForm({ dsTu, currentUser }) {
               >
                 {ketQua || '-'}
               </div>
+              {ketQua && doAmStatus && (
+                <p className="mt-1.5 text-center text-xs font-semibold text-slate-500">
+                  Nhiệt độ:{' '}
+                  <span className={nhietDoStatus === 'ĐẠT' ? 'text-emerald-600' : 'text-rose-600'}>
+                    {nhietDoStatus}
+                  </span>{' '}
+                  &bull; Độ ẩm:{' '}
+                  <span className={doAmStatus === 'ĐẠT' ? 'text-emerald-600' : 'text-rose-600'}>
+                    {doAmStatus}
+                  </span>
+                </p>
+              )}
             </div>
 
             <div>
