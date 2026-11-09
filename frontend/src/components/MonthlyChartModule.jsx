@@ -36,15 +36,25 @@ export function formatDecimal(v) {
 // getRect(label): trả về DOMRect của ô thuộc hàng đó (hoặc null).
 // Trả về { x, y } tương đối so với wrapRect, hoặc null.
 function lineValuePoint(v, labels, getRect, wrapRect) {
-  if (!labels || labels.length === 0) return null;
-  const step = labels.length > 1 ? Math.abs(labels[0] - labels[1]) || 1 : 1;
-  const minL = Math.min(...labels);
-  const maxL = Math.max(...labels);
-  let n = Math.floor(v / step + 1e-9) * step;
-  n = Math.max(minL, Math.min(maxL, n));
+  // Bỏ các hàng không phải số (vd 'sep' = vùng phân cách của bể Memmert)
+  const nums = (labels || []).filter((x) => typeof x === 'number' && !isNaN(x));
+  if (nums.length === 0) return null;
+  // Bước = khoảng cách nhỏ nhất giữa 2 hàng liền nhau (1°C, 5%...)
+  let step = Infinity;
+  for (let i = 1; i < nums.length; i++) {
+    const d = Math.abs(nums[i] - nums[i - 1]);
+    if (d > 0 && d < step) step = d;
+  }
+  if (!isFinite(step)) step = 1;
+  // Hàng chứa giá trị = hàng có nhãn lớn nhất mà <= v (nếu không có thì lấy hàng nhỏ nhất)
+  const sorted = [...nums].sort((a, b) => a - b);
+  let n = sorted[0];
+  for (const lbl of sorted) {
+    if (lbl <= v + 1e-9) n = lbl;
+  }
   const rect = getRect(n);
   if (!rect) return null;
-  const desc = labels[0] > labels[labels.length - 1];
+  const desc = nums[0] > nums[nums.length - 1];
   const frac = Math.max(-1, Math.min(1, (v - n) / step));
   const y = desc ? rect.bottom - frac * rect.height : rect.top + frac * rect.height;
   return {
