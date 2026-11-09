@@ -310,6 +310,23 @@ export default function TemperatureForm({ dsTu, currentUser }) {
                 className="w-full rounded-xl border-2 border-teal-500 bg-white px-3 py-2 text-center text-2xl font-black text-teal-800 shadow-inner focus:outline-none focus:ring-4 focus:ring-teal-400/20"
                 placeholder="0,0"
               />
+              {/* Gợi ý số âm (bàn phím số trên điện thoại thường không có dấu "-") */}
+              {(() => {
+                const raw = String(nhietDoDoDc).trim();
+                const num = parseFloat(raw.replace(',', '.'));
+                if (raw === '' || raw.startsWith('-') || isNaN(num) || num === 0) return null;
+                const negative = `-${raw}`;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setNhietDoDoDc(negative)}
+                    className="mt-1.5 w-full rounded-lg border border-sky-300 bg-white px-2 py-1 text-center text-sm font-bold text-sky-700 shadow-xs hover:bg-sky-50 active:scale-95 transition"
+                    title="Bấm để đổi sang số âm"
+                  >
+                    Gợi ý: <span className="font-black">{negative}</span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
 
