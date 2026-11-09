@@ -124,6 +124,26 @@ export default function App() {
     }
   };
 
+  // Sau khi đổi mật khẩu: cập nhật phiên đăng nhập và danh sách NV đang giữ trong bộ nhớ
+  const handlePasswordChanged = (newPassword) => {
+    setCurrentUser((u) => {
+      const next = { ...u, password: newPassword };
+      try {
+        localStorage.setItem('erp_user_session', JSON.stringify(next));
+      } catch (e) {
+        console.error('Failed to save session:', e);
+      }
+      return next;
+    });
+    setUsersList((list) =>
+      list.map((u) =>
+        String(u.id).trim().toLowerCase() === String(currentUser?.id).trim().toLowerCase()
+          ? { ...u, password: newPassword }
+          : u
+      )
+    );
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('erp_user_session');
     setCurrentUser(null);
@@ -174,7 +194,7 @@ export default function App() {
         <Header
           currentUser={currentUser}
           onLogout={handleLogout}
-          onNavigate={navigateTo}
+          onPasswordChanged={handlePasswordChanged}
         />
         <main className="flex-1 p-4 md:p-8">
           <TemperatureForm dsTu={dsTu} currentUser={currentUser} />

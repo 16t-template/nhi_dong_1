@@ -74,7 +74,7 @@ export async function fetchUsers() {
     (h) => h === 'ho_ten' || h === 'họ tên' || h === 'name' || h === 'ten'
   );
   const iPass = headers.findIndex(
-    (h) => h === 'password' || h === 'mat_khau'
+    (h) => h === 'password' || h === 'mat_khau' || h === 'mk'
   );
   const iRole = headers.findIndex((h) => h === 'role' || h === 'quyen');
 
@@ -87,6 +87,60 @@ export async function fetchUsers() {
       password: iPass !== -1 ? r[iPass] || '' : r[6] || '',
     }))
     .filter((u) => u.id);
+}
+
+/**
+ * Đổi mật khẩu nhân viên trong sheet DSNV.
+ * Kiểm tra lại mật khẩu hiện tại từ sheet (dữ liệu mới nhất) trước khi ghi.
+ */
+export async function updateUserPassword(userId, currentPassword, newPassword) {
+  const token = await getAccessToken();
+  const sheet = CONFIG.authSheetName;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${sheet}!A1:Z200`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error('Không tải được danh sách nhân viên');
+  const data = await resp.json();
+  const rows = data.values || [];
+  if (rows.length <= 1) throw new Error('Sheet DSNV trống');
+
+  const headers = rows[0].map((h) => (h ? h.toString().trim().toLowerCase() : ''));
+  let iId = headers.findIndex((h) => h === 'id');
+  let iPass = headers.findIndex((h) => h === 'password' || h === 'mat_khau' || h === 'mk');
+  if (iId === -1) iId = 0;
+  if (iPass === -1) iPass = 6;
+
+  const target = String(userId || '').trim().toLowerCase();
+  const rowIdx = rows.findIndex(
+    (r, i) => i > 0 && String(r[iId] || '').trim().toLowerCase() === target
+  );
+  if (rowIdx === -1) throw new Error('Không tìm thấy tài khoản trong DSNV');
+
+  const savedPassword = String(rows[rowIdx][iPass] || '').trim();
+  if (savedPassword !== String(currentPassword || '').trim()) {
+    throw new Error('Mật khẩu hiện tại không đúng');
+  }
+
+  // Đổi số cột sang chữ (0 -> A, 6 -> G)
+  let col = '';
+  let n = iPass + 1;
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    col = String.fromCharCode(65 + m) + col;
+    n = Math.floor((n - 1) / 26);
+  }
+  const cell = `${sheet}!${col}${rowIdx + 1}`;
+
+  // RAW: giữ nguyên chuỗi (vd "0123" không bị mất số 0 đầu)
+  const upd = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(cell)}?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[String(newPassword)]] }),
+    }
+  );
+  if (!upd.ok) throw new Error('Lỗi khi lưu mật khẩu mới lên Google Sheets');
+  return true;
 }
 
 /**

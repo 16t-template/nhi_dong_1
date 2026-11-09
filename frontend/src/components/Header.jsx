@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Activity, Key, LogOut } from 'lucide-react';
+import ChangePasswordModal from './ChangePasswordModal';
 
-export default function Header({ currentUser, onLogout }) {
+export default function Header({ currentUser, onLogout, onPasswordChanged }) {
+  const [showChangePw, setShowChangePw] = useState(false);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -76,6 +78,10 @@ export default function Header({ currentUser, onLogout }) {
 
             <button
               type="button"
+              onClick={() => {
+                setDropdownOpen(false);
+                setShowChangePw(true);
+              }}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-teal-50 hover:text-teal-900"
             >
               <Key className="h-4 w-4 text-slate-400" />
@@ -96,6 +102,14 @@ export default function Header({ currentUser, onLogout }) {
           </div>
         )}
       </div>
+
+      {showChangePw && (
+        <ChangePasswordModal
+          currentUser={currentUser}
+          onClose={() => setShowChangePw(false)}
+          onChanged={onPasswordChanged}
+        />
+      )}
     </header>
   );
 }
