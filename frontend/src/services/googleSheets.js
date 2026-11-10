@@ -394,6 +394,11 @@ export async function submitRecord({
   const urlData = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA:append?valueInputOption=USER_ENTERED`;
   const urlCV = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/CV:append?valueInputOption=USER_ENTERED`;
 
+  // Google Sheets giới hạn 50.000 ký tự / ô
+  if (String(chuKy || '').length > 49000) {
+    throw new Error('Chữ ký quá lớn, vui lòng bấm "Ký lại" và ký gọn hơn.');
+  }
+
   const resData = await fetch(urlData, {
     method: 'POST',
     headers: {
@@ -402,6 +407,20 @@ export async function submitRecord({
     },
     body: JSON.stringify({ values: [rowData] }),
   });
+
+  // Lưu DATA thất bại thì dừng luôn, không ghi CV / DATA_ALL (tránh dòng CV "mồ côi")
+  if (!resData.ok) {
+    let detail = '';
+    try {
+      detail = (await resData.json())?.error?.message || '';
+    } catch {
+      /* ignore */
+    }
+    console.error('DATA append error:', resData.status, detail);
+    throw new Error(
+      `Lỗi khi lưu dữ liệu lên Google Sheets (mã ${resData.status})${detail ? ': ' + detail : ''}`
+    );
+  }
 
   // Đặt định dạng "Tự động" cho các cột số (I:N) của dòng vừa thêm,
   // tránh việc dòng mới kế thừa định dạng Ngày khiến 3,5 hiện thành ngày tháng.
@@ -456,8 +475,9 @@ export async function submitRecord({
     console.error('DATA_ALL error:', allErr);
   }
 
-  if (!resData.ok || !resCV.ok) {
-    throw new Error('Lỗi khi lưu dữ liệu lên Google Sheets!');
+  // DATA đã lưu thành công; lỗi ghi CV chỉ ghi log để người dùng không bấm lưu lại (tránh trùng dòng DATA)
+  if (!resCV.ok) {
+    console.error('CV append error:', resCV.status);
   }
 
   return true;

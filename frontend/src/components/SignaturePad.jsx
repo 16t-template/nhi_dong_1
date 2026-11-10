@@ -46,11 +46,42 @@ const SignaturePad = forwardRef(function SignaturePad(props, ref) {
     isEmpty: () => {
       return !padInstanceRef.current || padInstanceRef.current.isEmpty();
     },
+    // Xuất chữ ký đã thu nhỏ để không vượt giới hạn 50.000 ký tự/ô của Google Sheets.
+    // (Canvas gốc trên điện thoại được nhân theo devicePixelRatio nên ảnh rất nặng.)
     toDataURL: () => {
-      if (padInstanceRef.current && !padInstanceRef.current.isEmpty()) {
-        return padInstanceRef.current.toDataURL();
+      const pad = padInstanceRef.current;
+      const src = canvasRef.current;
+      if (!pad || pad.isEmpty() || !src) return '';
+
+      const MAX_LEN = 40000;
+      const rect = src.getBoundingClientRect();
+      let w = Math.min(Math.round(rect.width) || 400, 400);
+      let h = Math.round(w * (src.height / src.width)) || 160;
+
+      const render = (width, height, type, quality) => {
+        const c = document.createElement('canvas');
+        c.width = width;
+        c.height = height;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(src, 0, 0, width, height);
+        return c.toDataURL(type, quality);
+      };
+
+      let url = render(w, h, 'image/png');
+      // Thu nhỏ dần nếu vẫn quá lớn
+      while (url.length > MAX_LEN && w > 160) {
+        w = Math.round(w * 0.8);
+        h = Math.round(h * 0.8);
+        url = render(w, h, 'image/png');
       }
-      return '';
+      // Phương án cuối: JPEG nén
+      if (url.length > MAX_LEN) {
+        url = render(w, h, 'image/jpeg', 0.6);
+      }
+      return url;
     },
   }));
 
