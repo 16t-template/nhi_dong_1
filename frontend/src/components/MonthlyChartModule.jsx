@@ -2062,8 +2062,8 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
       humPolyRef.current.setAttribute('points', '');
       humPolyRef.current.style.display = 'none';
     }
-    drawSvgDots(svgRef.current, 'temp', tPts, '#0056b3', 3.25);
-    drawSvgDots(svgRef.current, 'hum', hPts, '#d32f2f', 3.25);
+    drawSvgDots(svgRef.current, 'temp', tPts, '#d32f2f', 3.25);
+    drawSvgDots(svgRef.current, 'hum', hPts, '#0056b3', 3.25);
   };
 
   useLayoutEffect(() => {
@@ -2116,11 +2116,11 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
         <div>
           <span className="font-bold text-slate-600">Nhiệt độ chuẩn:</span>{' '}
-          <span className="font-black text-blue-700">{specs.standardTemp}</span>
+          <span className="font-black text-rose-600">{specs.standardTemp}</span>
         </div>
         <div>
           <span className="font-bold text-slate-600">Độ ẩm chuẩn:</span>{' '}
-          <span className="font-black text-rose-600">{specs.standardHumidity}</span>
+          <span className="font-black text-blue-700">{specs.standardHumidity}</span>
         </div>
         <div>
           <span className="font-bold text-slate-600">Mã nhiệt ẩm kế:</span>{' '}
@@ -2147,24 +2147,24 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
           preserveAspectRatio="none"
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         >
-          {/* Blue line: Temperature */}
+          {/* Red line: Temperature */}
           <polyline
             ref={tempPolyRef}
             points=""
             fill="none"
-            stroke="#0056b3"
+            stroke="#d32f2f"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
             style={{ display: 'none' }}
           />
 
-          {/* Red line: Humidity */}
+          {/* Blue line: Humidity */}
           <polyline
             ref={humPolyRef}
             points=""
             fill="none"
-            stroke="#d32f2f"
+            stroke="#0056b3"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -2188,10 +2188,10 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
             </tr>
             {/* Header Row 2: T °C | Ẩm độ % | S | C */}
             <tr className="bg-slate-50 font-bold text-[9px] border-b border-slate-400">
-              <th className="w-[34px] border-r border-slate-300 py-0.5 text-blue-900 font-black">
+              <th className="w-[34px] border-r border-slate-300 py-0.5 text-rose-600 font-black">
                 T ºC
               </th>
-              <th className="w-[38px] border-r border-slate-400 py-0.5 text-rose-600 font-black">
+              <th className="w-[38px] border-r border-slate-400 py-0.5 text-blue-900 font-black">
                 Ẩm %
               </th>
               {Array.from({ length: 31 }, (_, i) => (
@@ -2220,11 +2220,11 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
                   }`}
                 >
                   {/* Temp Axis Label */}
-                  <td className="w-[34px] border-r border-slate-300 font-bold text-[10px] text-slate-900">
+                  <td className="w-[34px] border-r border-slate-300 font-bold text-[10px] text-rose-600">
                     {t}
                   </td>
                   {/* Humidity Axis Label */}
-                  <td className="w-[38px] border-r border-slate-400 font-bold text-[10px] text-rose-600">
+                  <td className="w-[38px] border-r border-slate-400 font-bold text-[10px] text-blue-700">
                     {h}
                   </td>
 
@@ -2310,11 +2310,11 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
       {/* Legend & instructions */}
       <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-600 border-t border-slate-200 pt-2 mt-2">
         <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 font-bold text-blue-800">
-            <span className="h-2.5 w-2.5 rounded-full bg-blue-700 inline-block" /> Chấm xanh: Nhiệt độ
-          </span>
           <span className="flex items-center gap-1.5 font-bold text-rose-700">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-600 inline-block" /> Chấm đỏ: Ẩm độ
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-600 inline-block" /> Chấm đỏ: Nhiệt độ
+          </span>
+          <span className="flex items-center gap-1.5 font-bold text-blue-800">
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-700 inline-block" /> Chấm xanh: Ẩm độ
           </span>
           <span>S (Sáng): 7:30 - 8:00 &bull; C (Chiều): 15:30 - 16:00</span>
         </div>
