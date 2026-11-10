@@ -23,8 +23,8 @@ const SignaturePad = forwardRef(function SignaturePad(props, ref) {
     }
 
     const pad = new SignaturePadLib(canvas, {
-      backgroundColor: 'rgb(240, 253, 250)',
-      penColor: 'rgb(15, 23, 42)',
+      backgroundColor: 'rgb(255, 255, 255)',
+      penColor: 'rgb(0, 0, 0)',
     });
     padInstanceRef.current = pad;
 
@@ -67,6 +67,17 @@ const SignaturePad = forwardRef(function SignaturePad(props, ref) {
         ctx.fillRect(0, 0, width, height);
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(src, 0, 0, width, height);
+        // Chuyển sang trắng đen tuyệt đối: ảnh PNG nhẹ hơn khoảng một nửa
+        const img = ctx.getImageData(0, 0, width, height);
+        const p = img.data;
+        for (let i = 0; i < p.length; i += 4) {
+          const v = (p[i] + p[i + 1] + p[i + 2]) / 3 < 170 ? 0 : 255;
+          p[i] = v;
+          p[i + 1] = v;
+          p[i + 2] = v;
+          p[i + 3] = 255;
+        }
+        ctx.putImageData(img, 0, 0);
         return c.toDataURL(type, quality);
       };
 
@@ -107,7 +118,7 @@ const SignaturePad = forwardRef(function SignaturePad(props, ref) {
         </button>
       </div>
 
-      <div className="group relative h-40 w-full touch-none overflow-hidden rounded-2xl border-2 border-teal-200 bg-teal-50/50 shadow-inner">
+      <div className="group relative h-40 w-full touch-none overflow-hidden rounded-2xl border-2 border-teal-200 bg-white shadow-inner">
         <canvas
           ref={canvasRef}
           className="absolute inset-0 z-10 h-full w-full cursor-crosshair touch-none"
