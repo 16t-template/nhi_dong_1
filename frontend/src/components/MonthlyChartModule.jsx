@@ -64,7 +64,8 @@ function lineValuePoint(v, labels, getRect, wrapRect) {
 }
 
 // Vẽ các chấm tròn lên SVG overlay (để chấm nằm đúng vị trí số lẻ, khớp với đường nối)
-function drawSvgDots(svg, layer, pts, color, r) {
+// labelMode: 'none' = không hiện số, 'all' = hiện tất cả, 'decimal' = chỉ hiện số lẻ
+function drawSvgDots(svg, layer, pts, color, r, labelMode = 'decimal') {
   if (!svg) return;
   const NS = 'http://www.w3.org/2000/svg';
   let g = svg.querySelector(`g[data-layer="${layer}"]`);
@@ -83,9 +84,12 @@ function drawSvgDots(svg, layer, pts, color, r) {
     c.setAttribute('class', 'sheet-dot');
     g.appendChild(c);
 
-    // Ghi số lẻ cạnh chấm (vd "2,6") để đọc đúng giá trị thập phân
+    // Ghi số cạnh chấm (vd "2,6") theo chế độ hiển thị đã chọn
     const v = pt.temp ?? pt.value;
-    if (typeof v === 'number' && !Number.isInteger(v)) {
+    const showLabel =
+      typeof v === 'number' &&
+      (labelMode === 'all' || (labelMode === 'decimal' && !Number.isInteger(v)));
+    if (showLabel) {
       const t = document.createElementNS(NS, 'text');
       t.setAttribute('x', (pt.x + r + 1.5).toFixed(1));
       t.setAttribute('y', (pt.y - r - 1).toFixed(1));
@@ -481,6 +485,23 @@ export default function MonthlyChartModule({
 }) {
   const [viewMode, setViewMode] = useState('hospitalSheet'); // 'hospitalSheet' | 'interactiveCurve'
   const [activeSheetTab, setActiveSheetTab] = useState('all'); // 'all' | 'p1' | 'p2' | 'maintenance'
+  // Chế độ hiện số cạnh chấm: 'none' | 'all' | 'decimal' (ghi nhớ trên trình duyệt)
+  const [labelMode, setLabelModeState] = useState(() => {
+    try {
+      const v = localStorage.getItem('chart_label_mode');
+      return v === 'none' || v === 'all' || v === 'decimal' ? v : 'decimal';
+    } catch {
+      return 'decimal';
+    }
+  });
+  const setLabelMode = (m) => {
+    setLabelModeState(m);
+    try {
+      localStorage.setItem('chart_label_mode', m);
+    } catch {
+      /* ignore */
+    }
+  };
 
   // String normalization
   const cleanStr = (s) =>
@@ -965,6 +986,32 @@ export default function MonthlyChartModule({
       </div>
       )}
 
+      {/* 3 nút chọn cách hiện số cạnh chấm (không in ra giấy) */}
+      {viewMode === 'hospitalSheet' && (
+        <div className="no-print fixed right-3 top-1/3 z-40 flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur-sm">
+          <span className="px-1 text-center text-[10px] font-bold text-slate-500">Hiện số</span>
+          {[
+            { key: 'none', label: 'Ẩn', title: 'Không hiện số cạnh chấm' },
+            { key: 'all', label: 'Tất cả', title: 'Hiện số ở tất cả các chấm' },
+            { key: 'decimal', label: 'Số lẻ', title: 'Chỉ hiện số lẻ (vd 2,6)' },
+          ].map((b) => (
+            <button
+              key={b.key}
+              type="button"
+              title={b.title}
+              onClick={() => setLabelMode(b.key)}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
+                labelMode === b.key
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Main Content Area */}
       {viewMode === 'hospitalSheet' ? (
         <div className="space-y-6">
@@ -978,6 +1025,7 @@ export default function MonthlyChartModule({
                   month={monthPart}
                   year={yearPart}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
               {(activeSheetTab === 'all' || activeSheetTab === 'maintenance') && (
@@ -1006,6 +1054,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [6, 5, 4, 3, 2, 1]}
                   highlightTemps={specs.highlightTemps || [2, 6]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1022,6 +1071,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [6, 5, 4, 3, 2, 1]}
                   highlightTemps={specs.highlightTemps || [2, 6]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1038,6 +1088,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [6, 5, 4, 3, 2, 1]}
                   highlightTemps={specs.highlightTemps || [2, 6]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1054,6 +1105,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [6, 5, 4, 3, 2, 1]}
                   highlightTemps={specs.highlightTemps || [2, 6]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1070,6 +1122,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [6, 5, 4, 3, 2, 1]}
                   highlightTemps={specs.highlightTemps || [2, 6]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1100,6 +1153,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [8, 7, 6, 5, 4, 3, 2]}
                   highlightTemps={specs.highlightTemps || [2, 8]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1116,6 +1170,7 @@ export default function MonthlyChartModule({
                   temps={specs.temps || [8, 7, 6, 5, 4, 3, 2]}
                   highlightTemps={specs.highlightTemps || [2, 8]}
                   dataMap={monthDataMap}
+                  labelMode={labelMode}
                 />
               )}
 
@@ -1244,11 +1299,14 @@ function HospitalWeeklyTable({
   temps,
   highlightTemps,
   dataMap,
+  labelMode = 'decimal',
 }) {
   const days = endDay - startDay + 1;
   const wrapRef = useRef(null);
   const svgRef = useRef(null);
   const polyRef = useRef(null);
+  const labelModeRef = useRef(labelMode);
+  labelModeRef.current = labelMode;
   const dataMapRef = useRef(dataMap);
   dataMapRef.current = dataMap;
   const tempsRef = useRef(temps);
@@ -1298,7 +1356,7 @@ function HospitalWeeklyTable({
       polyRef.current.setAttribute('points', '');
       polyRef.current.style.display = 'none';
     }
-    drawSvgDots(svgRef.current, 'temp', pts, '#dc2626', 3.25);
+    drawSvgDots(svgRef.current, 'temp', pts, '#dc2626', 3.25, labelModeRef.current);
   };
 
   useEffect(() => {
@@ -1316,7 +1374,7 @@ function HospitalWeeklyTable({
       window.removeEventListener('resize', onResize);
       window.removeEventListener('beforeprint', onBeforePrint);
     };
-  }, [dataMap, temps, startDay, endDay, cabinetName]);
+  }, [dataMap, temps, startDay, endDay, cabinetName, labelMode]);
 
   const SLOTS_PER_DAY = 6;
 
@@ -1622,11 +1680,14 @@ function HospitalHalfTable({
   temps,
   highlightTemps,
   dataMap,
+  labelMode = 'decimal',
 }) {
   const days = endDay - startDay + 1;
   const wrapRef = useRef(null);
   const svgRef = useRef(null);
   const polyRef = useRef(null);
+  const labelModeRef = useRef(labelMode);
+  labelModeRef.current = labelMode;
   const dataMapRef = useRef(dataMap);
   dataMapRef.current = dataMap;
   const tempsRef = useRef(temps);
@@ -1675,7 +1736,7 @@ function HospitalHalfTable({
       polyRef.current.setAttribute('points', '');
       polyRef.current.style.display = 'none';
     }
-    drawSvgDots(svgRef.current, 'temp', pts, '#dc2626', 3.75);
+    drawSvgDots(svgRef.current, 'temp', pts, '#dc2626', 3.75, labelModeRef.current);
   };
 
   useLayoutEffect(() => {
@@ -1686,7 +1747,7 @@ function HospitalHalfTable({
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [dataMap, temps, startDay, endDay, cabinetName]);
+  }, [dataMap, temps, startDay, endDay, cabinetName, labelMode]);
 
   useEffect(() => {
     if (!wrapRef.current) return;
@@ -1967,7 +2028,9 @@ function HospitalHalfTable({
  * Component: Hospital Room Sheet (Matching 16, 17, 18 .html templates)
  * Dual-scale: Temperature (15-32°C) and Humidity (15-100%)
  */
-function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
+function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap, labelMode = 'decimal' }) {
+  const labelModeRef = useRef(labelMode);
+  labelModeRef.current = labelMode;
   const wrapRef = useRef(null);
   const svgRef = useRef(null);
   const tempPolyRef = useRef(null);
@@ -2062,8 +2125,8 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
       humPolyRef.current.setAttribute('points', '');
       humPolyRef.current.style.display = 'none';
     }
-    drawSvgDots(svgRef.current, 'temp', tPts, '#d32f2f', 3.25);
-    drawSvgDots(svgRef.current, 'hum', hPts, '#0056b3', 3.25);
+    drawSvgDots(svgRef.current, 'temp', tPts, '#d32f2f', 3.25, labelModeRef.current);
+    drawSvgDots(svgRef.current, 'hum', hPts, '#0056b3', 3.25, labelModeRef.current);
   };
 
   useLayoutEffect(() => {
@@ -2074,7 +2137,7 @@ function HospitalRoomSheet({ specs, cabinetName, month, year, dataMap }) {
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [dataMap, tempScale, humScale, cabinetName]);
+  }, [dataMap, tempScale, humScale, cabinetName, labelMode]);
 
   useEffect(() => {
     if (!wrapRef.current) return;
