@@ -8,6 +8,18 @@ import TemperatureForm from './components/TemperatureForm';
 import ChartOnlyView from './components/ChartOnlyView';
 import { fetchUsers, fetchCabinets } from './services/googleSheets';
 
+// Thư mục gốc của web ('' trên Vercel, '/nhi_dong_1' trên GitHub Pages)
+const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+
+// Đường dẫn hiện tại đã bỏ phần thư mục gốc, vd '/nhi_dong_1/data' -> '/data'
+function appPathname() {
+  const p = window.location.pathname;
+  if (BASE_PATH && (p === BASE_PATH || p.startsWith(BASE_PATH + '/'))) {
+    return p.slice(BASE_PATH.length) || '/';
+  }
+  return p;
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -24,7 +36,7 @@ export default function App() {
   // Nếu CÓ /data -> Mở Module DATA (Ảnh 2)
   // Nếu CÓ /data/<tên tủ hoặc mã tủ>/<tháng> (vd: /data/HE-sp-003/07-2026) -> Chỉ hiện biểu đồ
   const getChartParams = () => {
-    const segs = window.location.pathname.split('/').filter(Boolean);
+    const segs = appPathname().split('/').filter(Boolean);
     const first = (segs[0] || '').toLowerCase();
     if ((first === 'data' || first === 'bieu_do' || first === 'bieu-do') && segs.length >= 3) {
       const dec = (x) => {
@@ -44,7 +56,7 @@ export default function App() {
 
   const getInitialRoute = () => {
     if (getChartParams()) return 'chart_only';
-    const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    const rawPath = appPathname().toLowerCase().replace(/\/+$/, '');
     if (rawPath === '/trang_chu' || rawPath === '/trang-chu') return 'trang_chu';
     if (rawPath === '/data') return 'data';
     return 'form';
@@ -63,8 +75,8 @@ export default function App() {
     else if (route === 'data') targetPath = '/data';
     else if (route === 'form') targetPath = '/';
 
-    if (window.location.pathname !== targetPath) {
-      window.history.pushState(null, '', targetPath);
+    if (appPathname() !== targetPath) {
+      window.history.pushState(null, '', BASE_PATH + targetPath);
     }
   };
 

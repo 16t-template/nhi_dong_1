@@ -1,0 +1,64 @@
+# Tự build web (thư mục frontend) và đăng lên GitHub Pages mỗi khi push nhánh main.
+# Link: https://<tên-tổ-chức>.github.io/<tên-repo>/
+# Cần: Settings > Pages > Source = "GitHub Actions"
+#      Settings > Secrets and variables > Actions: VITE_SPREADSHEET_ID, VITE_SERVICE_ACCOUNT_EMAIL, VITE_PRIVATE_KEY
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Chỉ chạy ở repo của tổ chức 16t-template (repo cũ vẫn dùng Vercel)
+    if: github.repository_owner == '16t-template'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_SPREADSHEET_ID: ${{ secrets.VITE_SPREADSHEET_ID }}
+          VITE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.VITE_SERVICE_ACCOUNT_EMAIL }}
+          VITE_PRIVATE_KEY: ${{ secrets.VITE_PRIVATE_KEY }}
+
+      # GitHub Pages trả 404.html cho đường dẫn không có file (vd /data/...): dùng lại index.html để web tự xử lý
+      - name: SPA fallback
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
