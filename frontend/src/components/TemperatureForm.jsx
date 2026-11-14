@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { QrCode, CheckCircle2, AlertTriangle, Thermometer, Droplets, Save, Loader2 } from 'lucide-react';
 import QRScannerModal from './QRScannerModal';
 import SignaturePad from './SignaturePad';
 import KhungGioSelector, { getDefaultKhungGio } from './KhungGioSelector';
 import { CONFIG } from '../config/constants';
-import { submitRecord } from '../services/googleSheets';
+import { submitRecord, fetchDataRows } from '../services/googleSheets';
 
 export default function TemperatureForm({ dsTu, currentUser }) {
   const [idTu, setIdTu] = useState('');
@@ -26,6 +26,49 @@ export default function TemperatureForm({ dsTu, currentUser }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const signatureRef = useRef(null);
+
+  // ===== Khung giờ đã chấm trong "ngày làm việc" (từ 7:00 hôm nay tới 6:59 sáng hôm sau) =====
+  const [dataRows, setDataRows] = useState([]);
+  const loadDataRows = () =>
+    fetchDataRows()
+      .then((rows) => setDataRows(rows))
+      .catch((err) => console.error('Lỗi tải DATA (khung đã chấm):', err));
+  useEffect(() => {
+    loadDataRows();
+  }, []);
+
+  const normStr = (v) => String(v || '').normalize('NFC').trim().toLowerCase();
+
+  // Ngày làm việc của 1 thời điểm: lùi 7 tiếng rồi lấy ngày (để L5 23H, L6 3H tính chung ngày với L1)
+  const workDayKey = (date) => {
+    const d = new Date(date.getTime() - 7 * 3600 * 1000);
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  };
+  const parseRowTime = (r) => {
+    const src = (r.ngay_h || r.ngay || '').trim();
+    const [datePart, timePart = '12:00:00'] = src.split(' ');
+    const [dd, mm, yyyy] = (datePart || '').split('/').map(Number);
+    if (!dd || !mm || !yyyy) return null;
+    const [hh = 12, mi = 0, ss = 0] = timePart.split(':').map(Number);
+    return new Date(yyyy, mm - 1, dd, hh, mi, ss);
+  };
+
+  const doneSlots = useMemo(() => {
+    const set = new Set();
+    if (!tenTu && !idTu) return set;
+    const today = workDayKey(new Date());
+    const t = normStr(tenTu);
+    const id = normStr(idTu);
+    dataRows.forEach((r) => {
+      const matchTu =
+        (t && (normStr(r.ten) === t || normStr(r.id_tu) === t)) ||
+        (id && normStr(r.id_tu) === id);
+      if (!matchTu || !r.khung_h) return;
+      const time = parseRowTime(r);
+      if (time && workDayKey(time) === today) set.add(r.khung_h.trim());
+    });
+    return set;
+  }, [dataRows, tenTu, idTu]);
 
   // Status calculation (ĐẠT / THẤP / CAO) theo cả nhiệt độ và độ ẩm
   const toNumber = (v) => {
@@ -194,6 +237,20 @@ export default function TemperatureForm({ dsTu, currentUser }) {
 
       alert('Lưu dữ liệu thành công!');
 
+      // Đánh dấu ngay khung vừa lưu là "đã chấm", rồi tải lại DATA cho chắc
+      const now = new Date();
+      const p2 = (n) => String(n).padStart(2, '0');
+      setDataRows((rows) => [
+        {
+          ten: tenTu,
+          id_tu: idTu.trim(),
+          khung_h: khungH,
+          ngay_h: `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()} ${p2(now.getHours())}:${p2(now.getMinutes())}:${p2(now.getSeconds())}`,
+        },
+        ...rows,
+      ]);
+      loadDataRows();
+
       // Reset Form
       setIdTu('');
       setQrCode('');
@@ -297,6 +354,7 @@ export default function TemperatureForm({ dsTu, currentUser }) {
               nhietDoMax={nhietDoMax}
               selectedSlot={khungH}
               onChangeSlot={setKhungH}
+              doneSlots={doneSlots}
             />
           </div>
 
