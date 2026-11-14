@@ -6,6 +6,40 @@ import KhungGioSelector, { getDefaultKhungGio } from './KhungGioSelector';
 import { CONFIG } from '../config/constants';
 import { submitRecord, fetchDataRows } from '../services/googleSheets';
 
+// Ô chữ tự giãn chiều cao để tên dài xuống dòng (không cho xuống dòng bằng phím Enter)
+function AutoTextarea({ value, onChange, className, ...rest }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  useEffect(() => {
+    const onResize = () => {
+      const el = ref.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={onChange}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.preventDefault();
+      }}
+      className={`${className} resize-none overflow-hidden leading-snug`}
+      {...rest}
+    />
+  );
+}
+
 export default function TemperatureForm({ dsTu, currentUser }) {
   const [idTu, setIdTu] = useState('');
   const [qrCode, setQrCode] = useState('');
@@ -300,11 +334,10 @@ export default function TemperatureForm({ dsTu, currentUser }) {
               <label className="mb-2 block text-sm font-bold text-slate-700">
                 ID Tủ (Mã QR) <span className="text-rose-500">*</span>
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
+              <div className="flex items-start gap-2">
+                <AutoTextarea
                   value={idTu}
-                  onChange={(e) => handleCabinetLookup(e.target.value)}
+                  onChange={(e) => handleCabinetLookup(e.target.value.replace(/[\r\n]+/g, ' '))}
                   className="input-modern uppercase font-bold tracking-wide"
                   placeholder="Nhập hoặc quét mã..."
                 />
@@ -323,8 +356,7 @@ export default function TemperatureForm({ dsTu, currentUser }) {
               <label className="mb-2 block text-sm font-bold text-slate-700">
                 Tên tủ
               </label>
-              <input
-                type="text"
+              <AutoTextarea
                 value={tenTu}
                 readOnly
                 className="input-readonly font-semibold"
