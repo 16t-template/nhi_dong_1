@@ -36,6 +36,12 @@ function slotForHour(hr, use6Slots) {
   return hr >= 12 ? 'Chiều' : 'Sáng';
 }
 
+// Giờ chuẩn của từng khung (bấm chọn khung sẽ đặt giờ đo về giờ này, giữ nguyên ngày đã chọn)
+const SLOT_TIME = {
+  L1: '07:00', L2: '11:00', L3: '15:00', L4: '19:00', L5: '23:00', L6: '03:00',
+  Sáng: '07:30', Chiều: '15:30',
+};
+
 const SLOTS6 = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
 const SLOTS6_LABEL = { L1: 'L1 7H', L2: 'L2 11H', L3: 'L3 15H', L4: 'L4 19H', L5: 'L5 23H', L6: 'L6 3H' };
 const SLOTS2 = ['Sáng', 'Chiều'];
@@ -271,7 +277,12 @@ export default function AddRecordModal({
                   <button
                     key={s}
                     type="button"
-                    onClick={() => setKhungH(s)}
+                    onClick={() => {
+                      setKhungH(s);
+                      // Đặt giờ đo = giờ chuẩn của khung trên ngày đang chọn (L6 = 03:00 -> tính cho hôm trước)
+                      const datePart = String(dateTime).split('T')[0];
+                      if (datePart) setDateTime(`${datePart}T${SLOT_TIME[s]}`);
+                    }}
                     disabled={!cab}
                     title={done ? 'Khung này đã có bản ghi' : ''}
                     className={`rounded-lg px-2 py-2 text-xs font-bold transition ${

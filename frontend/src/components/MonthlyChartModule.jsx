@@ -431,7 +431,14 @@ export function getEquipmentSpecs(cabinetName, dataRows = []) {
 
   if (matched) {
     const dyn = matched.dynamicSpecs ? matched.dynamicSpecs(dataRows) : {};
-    const slots = force6Slots ? 6 : dyn.slotsPerDay || matched.slotsPerDay || 2;
+    // Phiếu phòng (nhiệt độ + độ ẩm) và bể Memmert có mẫu riêng: KHÔNG ép sang 6 ca
+    // dù dữ liệu lỡ ghi khung L1-L6 (vd bản ghi từ AppSheet chọn nhầm "L1").
+    const fixedLayout = matched.type === 'ROOM_DUAL' || matched.type === 'MEMMERT';
+    const slots = fixedLayout
+      ? matched.slotsPerDay || 2
+      : force6Slots
+        ? 6
+        : dyn.slotsPerDay || matched.slotsPerDay || 2;
     const type = slots === 6 ? 'CABINET_6_SLOTS' : dyn.type || matched.type || 'CABINET';
 
     return {

@@ -11,10 +11,10 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const SLOTS6 = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
 const SLOTS2 = ['Sáng', 'Chiều'];
 const SLOT_LABEL = { L1: 'L1 7H', L2: 'L2 11H', L3: 'L3 15H', L4: 'L4 19H', L5: 'L5 23H', L6: 'L6 3H', Sáng: 'Sáng', Chiều: 'Chiều' };
-// Giờ đo mặc định của từng khung; L6 (3h) là sáng hôm SAU của ngày ca
-const SLOT_TIME = {
-  L1: [7, 0, 0], L2: [11, 0, 0], L3: [15, 0, 0], L4: [19, 0, 0], L5: [23, 0, 0], L6: [3, 0, 1],
-  Sáng: [7, 30, 0], Chiều: [15, 30, 0],
+// Giờ đo mặc định của từng khung (đổi được ở đầu cột)
+const DEFAULT_SLOT_TIME = {
+  L1: '07:00', L2: '11:00', L3: '15:00', L4: '19:00', L5: '23:00', L6: '03:00',
+  Sáng: '07:30', Chiều: '15:30',
 };
 
 const toNumber = (v) => {
@@ -28,11 +28,15 @@ const checkRange = (val, min, max) => {
   return 'ĐẠT';
 };
 
-/** Thời điểm đo mặc định cho ngày ca `day` (1-31) của tháng `ym` ("yyyy-mm") và khung `slot` */
-function slotDate(ym, day, slot) {
+/**
+ * Thời điểm đo cho ngày CA `day` (1-31) của tháng `ym` ("yyyy-mm"), khung `slot`, giờ `hhmm` ("HH:MM").
+ * L5/L6 chọn giờ trước 7h sáng => đo vào sáng hôm SAU (vẫn tính cho ngày ca `day`).
+ */
+function slotDate(ym, day, slot, hhmm) {
   const [y, m] = ym.split('-').map(Number);
-  const [hh, mi, plusDay] = SLOT_TIME[slot];
-  return new Date(y, m - 1, day + plusDay, hh, mi, 0);
+  const [hh, mi] = String(hhmm || DEFAULT_SLOT_TIME[slot]).split(':').map(Number);
+  const nextDay = (slot === 'L5' || slot === 'L6') && hh < 7 ? 1 : 0;
+  return new Date(y, m - 1, day + nextDay, hh || 0, mi || 0, 0);
 }
 
 export default function QuickEntryModal({
@@ -51,6 +55,7 @@ export default function QuickEntryModal({
   const [autoNeg, setAutoNeg] = useState(false);
   const [ghiChu, setGhiChu] = useState('Nhập nhanh (ghi bù)');
   const [values, setValues] = useState({}); // key `${day}|${slot}|t` hoặc `|h`
+  const [slotTimes, setSlotTimes] = useState({ ...DEFAULT_SLOT_TIME }); // giờ đo của từng khung
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const inputRefs = useRef({});
@@ -172,7 +177,7 @@ export default function QuickEntryModal({
       khungH: p.slot,
       ghiChu,
       currentUser: { id: staff.id, name: staff.name },
-      measuredAt: slotDate(month, p.day, p.slot),
+      measuredAt: slotDate(month, p.day, p.slot, slotTimes[p.slot]),
     }));
 
     setSaving(true);
@@ -254,15 +259,23 @@ export default function QuickEntryModal({
             <>
               <p className="mb-2 text-[11px] text-slate-500">
                 Gõ số vào ô trống, <b>Tab</b> sang khung kế bên, <b>Enter</b> xuống ngày kế tiếp. Ô có ✓ là đã có dữ liệu.
-                Giờ đo mặc định: {slots.map((s) => `${s} ${pad2(SLOT_TIME[s][0])}:${pad2(SLOT_TIME[s][1])}`).join(', ')}
-                {use6 && ' (L6 là 3h sáng hôm sau)'}.
+                Giờ đo chọn ở đầu mỗi cột{use6 && ' (L5/L6 chọn giờ trước 7h = sáng hôm sau, vẫn tính cho ngày đó)'}.
               </p>
               <table className="w-full border-collapse text-xs">
                 <thead className="sticky top-0 z-10 bg-slate-100">
                   <tr>
                     <th className="border border-slate-200 px-2 py-1.5 text-left font-bold text-slate-700">Ngày</th>
                     {slots.map((s) => (
-                      <th key={s} className="border border-slate-200 px-2 py-1.5 font-bold text-slate-700">{SLOT_LABEL[s]}</th>
+                      <th key={s} className="border border-slate-200 px-2 py-1.5 font-bold text-slate-700">
+                        <div>{SLOT_LABEL[s]}</div>
+                        <input
+                          type="time"
+                          value={slotTimes[s] || ''}
+                          onChange={(e) => setSlotTimes((t) => ({ ...t, [s]: e.target.value || DEFAULT_SLOT_TIME[s] }))}
+                          className="mt-0.5 w-full rounded border border-slate-300 bg-white px-1 py-0.5 text-[11px] font-semibold text-slate-700"
+                          title={`Giờ đo cho khung ${s}`}
+                        />
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -276,10 +289,13 @@ export default function QuickEntryModal({
                           return (
                             <td key={s} className="border border-slate-200 bg-slate-50 px-2 py-1 text-center text-slate-500" title={`Đã có: ${ex.ngay_h} — ${ex.id_nv}`}>
                               ✓ {formatDecimal(ex.nhiet_do_do_dc)}{isRoom && ex.do_am_do_dc ? ` / ${formatDecimal(ex.do_am_do_dc)}%` : ''}
+                              {ex.ket_qua && (
+                                <div className={`text-[9px] font-black ${ex.ket_qua === 'ĐẠT' ? 'text-emerald-600' : 'text-rose-500'}`}>{ex.ket_qua}</div>
+                              )}
                             </td>
                           );
                         }
-                        if (slotDate(month, d, s) > now) {
+                        if (slotDate(month, d, s, slotTimes[s]) > now) {
                           return <td key={s} className="border border-slate-200 bg-slate-50 px-2 py-1 text-center text-slate-300">—</td>;
                         }
                         const tKey = `${d}|${s}|t`;
@@ -323,6 +339,15 @@ export default function QuickEntryModal({
                                 />
                               )}
                             </div>
+                            {(st || bad) && (
+                              <div
+                                className={`mt-0.5 text-center text-[9px] font-black leading-none ${
+                                  bad ? 'text-rose-700' : st === 'ĐẠT' ? 'text-emerald-600' : st === 'THẤP' ? 'text-cyan-700' : 'text-rose-600'
+                                }`}
+                              >
+                                {bad ? 'SAI SỐ' : `${formatDecimal(effTemp(values[tKey]))}° ${st}`}
+                              </div>
+                            )}
                           </td>
                         );
                       })}

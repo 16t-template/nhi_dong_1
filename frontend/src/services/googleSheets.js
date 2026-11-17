@@ -296,6 +296,72 @@ async function resetNumberFormat(token, sid, appendResult) {
 }
 
 /**
+ * Ghi các dòng vào CUỐI sheet DATA, đúng cột A -> W.
+ * Không dùng values:append vì Google tự đoán "bảng" và có thể ghi lệch cột
+ * khi có dòng để trống nhiều ô (vd dòng do AppSheet tạo).
+ * Trả về kết quả giống append: { updates: { updatedRange } }
+ */
+async function writeRowsAtEnd(token, sid, rows) {
+  const auth = { Authorization: `Bearer ${token}` };
+  // Dòng cuối có dữ liệu ở cột A
+  const colA = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA!A:A?majorDimension=COLUMNS`,
+    { headers: auth }
+  ).then((r) => r.json());
+  const lastRow = (colA.values && colA.values[0] ? colA.values[0].length : 1) || 1;
+  const startRow = lastRow + 1;
+  const endRow = startRow + rows.length - 1;
+
+  // Đảm bảo sheet đủ số dòng
+  const meta = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sid}?fields=sheets.properties(sheetId,title,gridProperties.rowCount)`,
+    { headers: auth }
+  ).then((r) => r.json());
+  const sheet = (meta.sheets || []).find((x) => x.properties.title === 'DATA');
+  if (sheet) {
+    cachedDataSheetId = sheet.properties.sheetId;
+    const rowCount = sheet.properties.gridProperties?.rowCount || 0;
+    if (endRow > rowCount) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`, {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: [
+            {
+              appendDimension: {
+                sheetId: sheet.properties.sheetId,
+                dimension: 'ROWS',
+                length: endRow - rowCount + 50,
+              },
+            },
+          ],
+        }),
+      });
+    }
+  }
+
+  const range = `DATA!A${startRow}:W${endRow}`;
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: rows }),
+    }
+  );
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = (await res.json())?.error?.message || '';
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`Lỗi khi lưu dữ liệu lên Google Sheets (mã ${res.status})${detail ? ': ' + detail : ''}`);
+  }
+  return { updates: { updatedRange: range } };
+}
+
+/**
  * Generate 8-character random ID
  */
 export function genRandomId() {
@@ -400,7 +466,6 @@ export async function submitRecord({
     nowTotalMinutes <= 510;
 
   const sid = CONFIG.spreadsheetId;
-  const urlData = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA:append?valueInputOption=USER_ENTERED`;
   const urlCV = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/CV:append?valueInputOption=USER_ENTERED`;
 
   // Google Sheets giới hạn 50.000 ký tự / ô
@@ -408,37 +473,15 @@ export async function submitRecord({
     throw new Error('Chữ ký quá lớn, vui lòng bấm "Ký lại" và ký gọn hơn.');
   }
 
-  const resData = await fetch(urlData, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ values: [rowData] }),
-  });
-
-  // Lưu DATA thất bại thì dừng luôn, không ghi CV / DATA_ALL (tránh dòng CV "mồ côi")
-  if (!resData.ok) {
-    let detail = '';
-    try {
-      detail = (await resData.json())?.error?.message || '';
-    } catch {
-      /* ignore */
-    }
-    console.error('DATA append error:', resData.status, detail);
-    throw new Error(
-      `Lỗi khi lưu dữ liệu lên Google Sheets (mã ${resData.status})${detail ? ': ' + detail : ''}`
-    );
-  }
+  // Ghi đúng cột A -> W ở cuối sheet DATA
+  const appendResult = await writeRowsAtEnd(token, sid, [rowData]);
 
   // Đặt định dạng "Tự động" cho các cột số (I:N) của dòng vừa thêm,
   // tránh việc dòng mới kế thừa định dạng Ngày khiến 3,5 hiện thành ngày tháng.
-  if (resData.ok) {
-    try {
-      await resetNumberFormat(token, sid, await resData.clone().json());
-    } catch (fmtErr) {
-      console.error('Lỗi đặt định dạng số:', fmtErr);
-    }
+  try {
+    await resetNumberFormat(token, sid, appendResult);
+  } catch (fmtErr) {
+    console.error('Lỗi đặt định dạng số:', fmtErr);
   }
 
   let resCV = { ok: true };
@@ -547,26 +590,10 @@ export async function submitRecordsBatch(records) {
     ];
   });
 
-  const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA:append?valueInputOption=USER_ENTERED`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: rows }),
-    }
-  );
-  if (!res.ok) {
-    let detail = '';
-    try {
-      detail = (await res.json())?.error?.message || '';
-    } catch {
-      /* ignore */
-    }
-    throw new Error(`Lỗi khi lưu lên Google Sheets (mã ${res.status})${detail ? ': ' + detail : ''}`);
-  }
-
+  // Ghi đúng cột A -> W ở cuối sheet DATA
+  const appendResult = await writeRowsAtEnd(token, sid, rows);
   try {
-    await resetNumberFormat(token, sid, await res.clone().json());
+    await resetNumberFormat(token, sid, appendResult);
   } catch (fmtErr) {
     console.error('Lỗi đặt định dạng số:', fmtErr);
   }
