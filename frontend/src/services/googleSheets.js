@@ -257,9 +257,10 @@ let cachedDataSheetId = null;
  */
 async function resetNumberFormat(token, sid, appendResult) {
   const range = appendResult?.updates?.updatedRange || ''; // vd: DATA!A4020:W4020
-  const m = range.match(/![A-Z]+(\d+)/);
+  const m = range.match(/![A-Z]+(\d+)(?::[A-Z]+(\d+))?/);
   if (!m) return;
   const rowIndex = parseInt(m[1], 10) - 1;
+  const endRowIndex = m[2] ? parseInt(m[2], 10) : rowIndex + 1;
 
   if (cachedDataSheetId === null) {
     const meta = await fetch(
@@ -281,7 +282,7 @@ async function resetNumberFormat(token, sid, appendResult) {
             range: {
               sheetId: cachedDataSheetId,
               startRowIndex: rowIndex,
-              endRowIndex: rowIndex + 1,
+              endRowIndex: endRowIndex,
               startColumnIndex: 8, // I
               endColumnIndex: 14, // N (exclusive)
             },
@@ -323,9 +324,11 @@ export async function submitRecord({
   ghiChu,
   chuKy,
   currentUser,
+  measuredAt, // (tuỳ chọn) Date: ngày giờ đo cụ thể khi thêm bản ghi thủ công
 }) {
   const token = await getAccessToken();
-  const now = new Date();
+  const isManual = measuredAt instanceof Date && !isNaN(measuredAt);
+  const now = isManual ? measuredAt : new Date();
   const pad0 = (n) => (n < 10 ? '0' + n : n);
 
   const idVal = genRandomId();
@@ -340,7 +343,7 @@ export async function submitRecord({
   const qrCodeVal = qrCode || idTu;
 
   const xacNhanVal = '';
-  const udtVal = now.toISOString();
+  const udtVal = new Date().toISOString(); // thời điểm ghi thực tế
   const lb1Val = `${idTu} | ${String(nhietDoDoDc).replace('.', ',')} | ${ketQua}`;
   const namThangVal = `${shiftDay.getFullYear()}/${pad0(shiftDay.getMonth() + 1)}`;
   const namThangTuVal = `${namThangVal} | ${idTu}`;
@@ -391,6 +394,7 @@ export async function submitRecord({
 
   const nowTotalMinutes = now.getHours() * 60 + now.getMinutes();
   const shouldAppendCV =
+    !isManual && // thêm thủ công (ghi bù) không ghi vào CV
     (khungH === 'Sáng' || khungH === 'L1') &&
     nowTotalMinutes >= 390 &&
     nowTotalMinutes <= 510;
@@ -486,4 +490,110 @@ export async function submitRecord({
   }
 
   return true;
+}
+
+/**
+ * Nhập nhanh: ghi NHIỀU bản ghi vào DATA trong 1 lần gọi (ghi bù, không chữ ký, không ghi CV).
+ * records: [{ idTu, tenTu, viTri, nhietDoMin, nhietDoMax, nhietDoDoDc, doAmMin, doAmMax, doAmDoDc,
+ *             ketQua, khungH, ghiChu, currentUser:{id,name}, measuredAt: Date }]
+ */
+export async function submitRecordsBatch(records) {
+  if (!records || records.length === 0) return 0;
+  const token = await getAccessToken();
+  const sid = CONFIG.spreadsheetId;
+  const pad0 = (n) => (n < 10 ? '0' + n : n);
+  const toNum = (v) => {
+    const str = String(v ?? '').trim().replace(',', '.');
+    if (str === '') return '';
+    const n = Number(str);
+    return isNaN(n) ? v : n;
+  };
+  const udtVal = new Date().toISOString();
+  const monthKeys = new Map(); // DATA_ALL: "yyyy/mm | tên tủ"
+
+  const rows = records.map((r) => {
+    const t = r.measuredAt;
+    const realDate = `${pad0(t.getDate())}/${pad0(t.getMonth() + 1)}/${t.getFullYear()}`;
+    const ngayH = `${realDate} ${pad0(t.getHours())}:${pad0(t.getMinutes())}:${pad0(t.getSeconds())}`;
+    const sd = shiftDateFor(r.khungH, t);
+    const ngay = `${pad0(sd.getDate())}/${pad0(sd.getMonth() + 1)}/${sd.getFullYear()}`;
+    const namThang = `${sd.getFullYear()}/${pad0(sd.getMonth() + 1)}`;
+    monthKeys.set(`${namThang} | ${r.tenTu}`, [namThang, r.tenTu]);
+    const idNv = r.currentUser ? r.currentUser.id || r.currentUser.name : '';
+    return [
+      genRandomId(),
+      ngay,
+      ngayH,
+      r.khungH,
+      r.idTu,
+      r.idTu,
+      r.tenTu,
+      r.viTri,
+      toNum(r.nhietDoMin),
+      toNum(r.nhietDoMax),
+      toNum(r.nhietDoDoDc),
+      toNum(r.doAmMin),
+      toNum(r.doAmMax),
+      toNum(r.doAmDoDc),
+      r.ketQua,
+      idNv,
+      r.ghiChu || '',
+      '',
+      '',
+      udtVal,
+      `${r.idTu} | ${String(r.nhietDoDoDc).replace('.', ',')} | ${r.ketQua}`,
+      "'" + namThang,
+      `${namThang} | ${r.idTu}`,
+    ];
+  });
+
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA:append?valueInputOption=USER_ENTERED`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: rows }),
+    }
+  );
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = (await res.json())?.error?.message || '';
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`Lỗi khi lưu lên Google Sheets (mã ${res.status})${detail ? ': ' + detail : ''}`);
+  }
+
+  try {
+    await resetNumberFormat(token, sid, await res.clone().json());
+  } catch (fmtErr) {
+    console.error('Lỗi đặt định dạng số:', fmtErr);
+  }
+
+  // DATA_ALL: thêm các tháng chưa có
+  try {
+    const chk = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA_ALL!A:A`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then((x) => x.json());
+    const existing = new Set((chk.values || []).flat());
+    const add = [...monthKeys.entries()]
+      .filter(([k]) => !existing.has(k))
+      .map(([k, [nt, ten]]) => [k, "'" + nt, ten]);
+    if (add.length) {
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/DATA_ALL:append?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: add }),
+        }
+      );
+    }
+  } catch (allErr) {
+    console.error('DATA_ALL error:', allErr);
+  }
+
+  return rows.length;
 }

@@ -16,12 +16,18 @@ import {
   X,
   Check,
   ArrowUpDown,
+  Plus,
+  Zap,
 } from 'lucide-react';
 import { fetchDataRows, fetchUsers } from '../services/googleSheets';
 import { rowShiftMonthYear } from '../utils/shiftDate';
 import MonthlyChartModule, { formatDecimal } from './MonthlyChartModule';
+import AddRecordModal from './AddRecordModal';
+import QuickEntryModal from './QuickEntryModal';
 
-export default function DataModule({ onBack, usersList = [] }) {
+export default function DataModule({ onBack, usersList = [], currentUser }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showQuickModal, setShowQuickModal] = useState(false);
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'stats' | 'chart'
   const [dataRows, setDataRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -745,6 +751,28 @@ export default function DataModule({ onBack, usersList = [] }) {
               )}
             </div>
 
+            {/* Nút Nhập nhanh theo tháng */}
+            <button
+              type="button"
+              onClick={() => setShowQuickModal(true)}
+              title="Nhập nhanh nhiều ngày cho 1 tủ (bảng theo tháng)"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-amber-500 bg-amber-500 px-2.5 text-xs font-bold text-white hover:bg-amber-600 active:scale-95 transition"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Nhập nhanh</span>
+            </button>
+
+            {/* Nút Thêm bản ghi thủ công */}
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              title="Thêm bản ghi mới vào Google Sheets (chọn tủ, nhiệt độ, ngày giờ)"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-600 px-2.5 text-xs font-bold text-white hover:bg-blue-700 active:scale-95 transition"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Thêm</span>
+            </button>
+
             {/* Nút Xuất file CSV */}
             <button
               type="button"
@@ -1404,6 +1432,29 @@ export default function DataModule({ onBack, usersList = [] }) {
           />
         )}
       </div>
+
+      {/* Modal thêm bản ghi */}
+      {showAddModal && (
+        <AddRecordModal
+          usersList={staffUsers}
+          currentUser={currentUser}
+          existingRows={dataRows}
+          getStaffDisplayName={getStaffDisplayName}
+          onClose={() => setShowAddModal(false)}
+          onSaved={loadData}
+        />
+      )}
+
+      {/* Modal nhập nhanh theo tháng */}
+      {showQuickModal && (
+        <QuickEntryModal
+          usersList={staffUsers}
+          currentUser={currentUser}
+          existingRows={dataRows}
+          onClose={() => setShowQuickModal(false)}
+          onSaved={loadData}
+        />
+      )}
 
       {/* Signature Preview Modal */}
       {previewSignature && (
