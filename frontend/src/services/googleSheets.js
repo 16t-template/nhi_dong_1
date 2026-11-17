@@ -1,5 +1,6 @@
 import jsrsasign from 'jsrsasign';
 import { CONFIG } from '../config/constants';
+import { shiftDateFor } from '../utils/shiftDate';
 
 let cachedAccessToken = null;
 let tokenExpiry = 0;
@@ -328,8 +329,12 @@ export async function submitRecord({
   const pad0 = (n) => (n < 10 ? '0' + n : n);
 
   const idVal = genRandomId();
-  const ngayVal = `${pad0(now.getDate())}/${pad0(now.getMonth() + 1)}/${now.getFullYear()}`;
-  const ngayHVal = `${ngayVal} ${pad0(now.getHours())}:${pad0(now.getMinutes())}:${pad0(now.getSeconds())}`;
+  // ngay_h = thời điểm đo thật; ngay / nam_thang = NGÀY THEO CA
+  // (L5, L6 đo trước 7h sáng thuộc ngày hôm trước)
+  const realDateVal = `${pad0(now.getDate())}/${pad0(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const ngayHVal = `${realDateVal} ${pad0(now.getHours())}:${pad0(now.getMinutes())}:${pad0(now.getSeconds())}`;
+  const shiftDay = shiftDateFor(khungH, now);
+  const ngayVal = `${pad0(shiftDay.getDate())}/${pad0(shiftDay.getMonth() + 1)}/${shiftDay.getFullYear()}`;
   const idNvVal = currentUser ? currentUser.id || currentUser.name : '';
   const tenNvVal = currentUser ? currentUser.name || '' : '';
   const qrCodeVal = qrCode || idTu;
@@ -337,7 +342,7 @@ export async function submitRecord({
   const xacNhanVal = '';
   const udtVal = now.toISOString();
   const lb1Val = `${idTu} | ${String(nhietDoDoDc).replace('.', ',')} | ${ketQua}`;
-  const namThangVal = `${now.getFullYear()}/${pad0(now.getMonth() + 1)}`;
+  const namThangVal = `${shiftDay.getFullYear()}/${pad0(shiftDay.getMonth() + 1)}`;
   const namThangTuVal = `${namThangVal} | ${idTu}`;
 
   // Gửi số dạng Number để Google Sheets (locale vi_VN) lưu đúng số thập phân, vd "2,6" -> 2.6

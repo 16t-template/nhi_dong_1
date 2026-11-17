@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchDataRows } from '../services/googleSheets';
 import MonthlyChartModule from './MonthlyChartModule';
+import { rowShiftMonthYear } from '../utils/shiftDate';
 
 // Chế độ "chỉ hiện biểu đồ" khi mở link dạng:
 //   /data/<tên tủ hoặc mã tủ>/<tháng>
@@ -14,21 +15,7 @@ const cleanStr = (s) =>
     .trim()
     .toLowerCase();
 
-const getMonthYear = (r) => {
-  if (r.nam_thang && r.nam_thang.includes('/')) {
-    const parts = r.nam_thang.trim().split('/');
-    if (parts.length === 2) return `${parts[1].padStart(2, '0')}/${parts[0]}`;
-  }
-  if (r.ngay) {
-    const parts = r.ngay.trim().split('/');
-    if (parts.length === 3) return `${parts[1].padStart(2, '0')}/${parts[2]}`;
-  }
-  if (r.ngay_h) {
-    const parts = r.ngay_h.trim().split(' ')[0].split('/');
-    if (parts.length === 3) return `${parts[1].padStart(2, '0')}/${parts[2]}`;
-  }
-  return '';
-};
+const getMonthYear = (r) => rowShiftMonthYear(r);
 
 // Chuẩn hóa tháng từ URL về dạng MM/YYYY
 export function parseMonthParam(raw) {

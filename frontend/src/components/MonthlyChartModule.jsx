@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
+import { rowShiftDay, rowShiftMonthYear } from '../utils/shiftDate';
 import {
   TrendingUp,
   Thermometer,
@@ -512,20 +513,8 @@ export default function MonthlyChartModule({
 
   // Helper: Extract month/year (MM/YYYY)
   const getMonthYear = (r) => {
-    if (r.nam_thang && r.nam_thang.includes('/')) {
-      const parts = r.nam_thang.trim().split('/');
-      if (parts.length === 2) return `${parts[1].padStart(2, '0')}/${parts[0]}`;
-    }
-    if (r.ngay) {
-      const parts = r.ngay.trim().split('/');
-      if (parts.length === 3) return `${parts[1].padStart(2, '0')}/${parts[2]}`;
-    }
-    if (r.ngay_h) {
-      const datePart = r.ngay_h.trim().split(' ')[0];
-      const parts = datePart.split('/');
-      if (parts.length === 3) return `${parts[1].padStart(2, '0')}/${parts[2]}`;
-    }
-    return '';
+    // Tháng theo ngày CA (L5/L6 đo trước 7h sáng tính cho ngày hôm trước)
+    return rowShiftMonthYear(r);
   };
 
   // Helper: Parse measurement timestamp strictly from ngay_h (or ngay + khung_h)
@@ -618,15 +607,8 @@ export default function MonthlyChartModule({
   const monthDataMap = useMemo(() => {
     const map = {};
     chartRows.forEach((r) => {
-      let day = null;
-      if (r.ngay) {
-        const parts = r.ngay.split('/');
-        if (parts.length >= 2) day = parseInt(parts[0], 10);
-      } else if (r.ngay_h) {
-        const datePart = r.ngay_h.split(' ')[0];
-        const parts = datePart.split('/');
-        if (parts.length >= 2) day = parseInt(parts[0], 10);
-      }
+      // Ngày theo ca: L5/L6 đo trước 7h sáng thuộc ngày hôm trước
+      const day = rowShiftDay(r);
       if (!day || isNaN(day) || day < 1 || day > 31) return;
 
       if (!map[day]) map[day] = {};
@@ -682,14 +664,8 @@ export default function MonthlyChartModule({
   const operators = useMemo(() => {
     const map = {};
     chartRows.forEach((r) => {
-      let day = null;
-      if (r.ngay) {
-        const parts = r.ngay.split('/');
-        if (parts.length >= 2) day = parseInt(parts[0], 10);
-      } else if (r.ngay_h) {
-        const parts = r.ngay_h.split(' ')[0].split('/');
-        if (parts.length >= 2) day = parseInt(parts[0], 10);
-      }
+      // Ngày theo ca: L5/L6 đo trước 7h sáng thuộc ngày hôm trước
+      const day = rowShiftDay(r);
       if (!day || isNaN(day) || day < 1 || day > 31) return;
 
       // In Image 2, the user's template shows the staff code (e.g. THB010)
